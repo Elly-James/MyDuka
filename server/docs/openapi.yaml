@@ -1,0 +1,77 @@
+openapi: 3.0.0
+info:
+  title: MyDuka API
+  version: 1.0.0
+  description: Inventory Management System API
+
+servers:
+  - url: http://localhost:5000/api
+    description: Development server
+
+paths:
+  /auth/login:
+    post:
+      summary: User login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+              required:
+                - email
+                - password
+      responses:
+        '200':
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  redirect_to:
+                    type: string
+                    enum: ['/merchant-dashboard', '/admin-dashboard', '/clerk-dashboard']
+  /inventory/products:
+    post:
+      summary: Create new product
+      security:
+        - JWT: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '201':
+          description: Product created
+          
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        name:
+          type: string
+        store_id:
+          type: integer
+        min_stock_level:
+          type: integer
+          default: 5
+      required:
+        - name
+        - store_id
+  securitySchemes:
+    JWT:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
