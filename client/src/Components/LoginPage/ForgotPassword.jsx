@@ -1,6 +1,7 @@
+// src/Components/LoginPage/ForgotPassword.jsx
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../../utils/api';
+import { api, handleApiError } from '../utils/api'; // Correct path
 import './login.css';
 
 const ForgotPassword = () => {
@@ -15,16 +16,16 @@ const ForgotPassword = () => {
       setMessage(response.data.message || 'Password reset email sent');
       setError('');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to send reset email');
+      handleApiError(err, setError);
       setMessage('');
     }
   };
 
   return (
-    <div className="forgot-password-container">
-      <div className="form-box">
+    <div className="login-container">
+      <div className="form-section centered">
         <h2>Forgot Password</h2>
-        <form onSubmit={handleForgotPassword}>
+        <form onSubmit={handleForgotPassword} className="auth-form">
           <input
             type="email"
             value={email}
@@ -32,12 +33,14 @@ const ForgotPassword = () => {
             placeholder="Enter your email"
             required
           />
-          <button type="submit">Send Reset Link</button>
+          <button type="submit" className="submit-button">
+            Send Reset Link
+          </button>
         </form>
-        {message && <p>{message}</p>}
+        {message && <p className="success">{message}</p>}
         {error && <p className="error">{error}</p>}
-        <p>
-          Back to <Link to="/login">Login</Link>
+        <p className="toggle-text">
+          Back to <Link to="/login" className="toggle-link">Login</Link>
         </p>
       </div>
     </div>

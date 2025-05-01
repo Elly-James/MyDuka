@@ -1,21 +1,23 @@
 import React, { useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthContext } from '../../context/AuthContext';
-import '../merchant.css';
+import { AuthContext } from '../context/AuthContext';
+import './merchant.css';
 
 const SideBar = () => {
   const navigate = useNavigate();
   const { logout } = useContext(AuthContext);
 
   return (
-    <div className="merchant-sidebar">
-      <h3>Merchant Dashboard</h3>
-      <a onClick={() => navigate('/merchant/dashboard')}>Dashboard</a>
-      <a onClick={() => navigate('/merchant/admin-management')}>Admin Management</a>
-      <a onClick={() => navigate('/merchant/payment-tracking')}>Payment Tracking</a>
-      <a onClick={() => navigate('/merchant/store-reports')}>Store Reports</a>
-      <button onClick={logout}>Logout</button>
-    </div>
+    <aside className="sidebar">
+      <h3 className="sidebar-title">Merchant Dashboard</h3>
+      <nav className="sidebar-nav">
+        <button onClick={() => navigate('/merchant/dashboard')} className="sidebar-link">Dashboard</button>
+        <button onClick={() => navigate('/merchant/admin-management')} className="sidebar-link">Admin Management</button>
+        <button onClick={() => navigate('/merchant/payment-tracking')} className="sidebar-link">Payment Tracking</button>
+        <button onClick={() => navigate('/merchant/store-reports')} className="sidebar-link">Store Reports</button>
+        <button onClick={logout} className="sidebar-logout">Logout</button>
+      </nav>
+    </aside>
   );
 };
 

@@ -1,10 +1,14 @@
 # app.py
+import logging
 from flask import Flask, jsonify, abort
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from extensions import db, jwt, cache, socketio, cors, limiter, migrate, mail  # Add mail
+from extensions import db, jwt, cache, socketio, cors, limiter, migrate, mail
 from config import config
-import logging
-from models import User  # Import User for JWT user loader
+from models import User
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def create_app(config_name='development'):
     app = Flask(__name__)
@@ -13,28 +17,25 @@ def create_app(config_name='development'):
     # Initialize extensions
     try:
         db.init_app(app)
+        jwt.init_app(app)
+        mail.init_app(app)
+        cache.init_app(app)
+        migrate.init_app(app, db)
+        cors.init_app(app, resources={r"/api/*": {"origins": app.config.get('CORS_ORIGINS', '*')}})
+        limiter.init_app(app)
+        
+        # Initialize SocketIO only if not in testing mode
+        if config_name != 'testing':
+            socketio.init_app(
+                app,
+                async_mode='eventlet',
+                cors_allowed_origins=app.config.get('CORS_ORIGINS', '*'),
+                logger=True,
+                engineio_logger=True
+            )
     except Exception as e:
-        app.logger.error(f"Failed to initialize database: {str(e)}")
+        logger.error(f"Failed to initialize extensions: {str(e)}")
         raise
-    
-    jwt.init_app(app)
-    mail.init_app(app)  # Initialize Flask-Mail
-    cache.init_app(app)
-    migrate.init_app(app, db)
-    
-    # Configure CORS and rate limiting
-    cors.init_app(app, resources={r"/api/*": {"origins": "*"}})
-    limiter.init_app(app)
-    
-    # Only initialize SocketIO if not in testing mode
-    if config_name != 'testing':
-        socketio.init_app(
-            app,
-            async_mode='eventlet',
-            cors_allowed_origins="*",
-            logger=True,
-            engineio_logger=True
-        )
     
     # Register blueprints
     from routes.auth import auth_bp
@@ -54,28 +55,51 @@ def create_app(config_name='development'):
     @jwt_required()
     def merchant_dashboard():
         if get_jwt_identity()['role'] != 'MERCHANT':
-            abort(403)
+            abort(403, description="Merchant role required")
         return jsonify({"message": "Merchant dashboard"})
     
     @app.route('/admin-dashboard')
     @jwt_required()
     def admin_dashboard():
         if get_jwt_identity()['role'] != 'ADMIN':
-            abort(403)
+            abort(403, description="Admin role required")
         return jsonify({"message": "Admin dashboard"})
     
     @app.route('/clerk-dashboard')
     @jwt_required()
     def clerk_dashboard():
         if get_jwt_identity()['role'] != 'CLERK':
-            abort(403)
+            abort(403, description="Clerk role required")
         return jsonify({"message": "Clerk dashboard"})
     
-    # Configure logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
-
-    # Initialize JWT user loader
+    # Health check endpoint
+    @app.route('/health')
+    def health():
+        try:
+            db.session.execute('SELECT 1')
+            return jsonify({"status": "healthy", "database": "connected"})
+        except Exception as e:
+            logger.error(f"Health check failed: {str(e)}")
+            return jsonify({"status": "unhealthy", "database": "disconnected"}), 500
+    
+    # Custom error handlers
+    @app.errorhandler(400)
+    def bad_request(error):
+        return jsonify({"status": "error", "message": str(error.description)}), 400
+    
+    @app.errorhandler(403)
+    def forbidden(error):
+        return jsonify({"status": "error", "message": str(error.description or "Forbidden")}), 403
+    
+    @app.errorhandler(404)
+    def not_found(error):
+        return jsonify({"status": "error", "message": str(error.description or "Resource not found")}), 404
+    
+    @app.errorhandler(429)
+    def too_many_requests(error):
+        return jsonify({"status": "error", "message": "Rate limit exceeded"}), 429
+    
+    # JWT user loader
     @jwt.user_identity_loader
     def user_identity_lookup(user):
         return {
@@ -89,6 +113,7 @@ def create_app(config_name='development'):
         identity = jwt_data["sub"]
         return User.query.get(identity["id"])
     
+    logger.info(f"Application started with config: {config_name}")
     return app
 
 app = create_app()

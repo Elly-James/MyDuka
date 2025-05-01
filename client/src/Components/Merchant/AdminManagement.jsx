@@ -1,26 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../../utils/api';
+import { api, handleApiError } from '../utils/api';
+import SideBar from './SideBar';
 import './merchant.css';
 
-const AdminManage = () => {
+const AdminManagement = () => {
   const [admins, setAdmins] = useState([]);
+  const [stores, setStores] = useState([]);
   const [inviteForm, setInviteForm] = useState({ email: '', store_id: '' });
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchAdmins();
-  }, []);
+    const fetchData = async () => {
+      try {
+        const adminsResponse = await api.get('/api/users?role=ADMIN');
+        setAdmins(adminsResponse.data.users || []);
 
-  const fetchAdmins = async () => {
-    try {
-      const response = await api.get('/api/users?role=ADMIN');
-      setAdmins(response.data.users || []);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch admins');
-    }
-  };
+        const storesResponse = await api.get('/api/stores');
+        setStores(storesResponse.data.stores || []);
+      } catch (err) {
+        handleApiError(err, setError);
+      }
+    };
+    fetchData();
+  }, []);
 
   const handleInvite = async (e) => {
     e.preventDefault();
@@ -31,9 +35,11 @@ const AdminManage = () => {
         store_id: parseInt(inviteForm.store_id),
       });
       setInviteForm({ email: '', store_id: '' });
-      fetchAdmins();
+      const adminsResponse = await api.get('/api/users?role=ADMIN');
+      setAdmins(adminsResponse.data.users || []);
+      setError('');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to send invitation');
+      handleApiError(err, setError);
     }
   };
 
@@ -41,27 +47,40 @@ const AdminManage = () => {
     if (window.confirm('Are you sure you want to delete this admin?')) {
       try {
         await api.delete(`/api/users/${id}`);
-        fetchAdmins();
+        setAdmins(admins.filter(admin => admin.id !== id));
       } catch (err) {
-        setError(err.response?.data?.message || 'Failed to delete admin');
+        handleApiError(err, setError);
       }
+    }
+  };
+
+  const handleDeactivate = async (id) => {
+    try {
+      await api.put(`/api/users/${id}/status`, { status: 'inactive' });
+      setAdmins(admins.map(admin => admin.id === id ? { ...admin, status: 'inactive' } : admin));
+    } catch (err) {
+      handleApiError(err, setError);
+    }
+  };
+
+  const handleActivate = async (id) => {
+    try {
+      await api.put(`/api/users/${id}/status`, { status: 'active' });
+      setAdmins(admins.map(admin => admin.id === id ? { ...admin, status: 'active' } : admin));
+    } catch (err) {
+      handleApiError(err, setError);
     }
   };
 
   return (
     <div className="merchant-container">
-      <div className="sidebar">
-        <h3>Merchant Dashboard</h3>
-        <a onClick={() => navigate('/merchant/dashboard')}>Dashboard</a>
-        <a onClick={() => navigate('/merchant/admin-management')}>Admin Management</a>
-        <a onClick={() => navigate('/merchant/payment-tracking')}>Payment Tracking</a>
-        <a onClick={() => navigate('/merchant/store-reports')}>Store Reports</a>
-      </div>
+      <SideBar />
       <div className="main-content">
-        <div className="admin-manage">
-          <h1>Admin Management</h1>
-          <h2>Invite New Admin</h2>
-          <form onSubmit={handleInvite}>
+        {error && <p className="error">{error}</p>}
+
+        <div className="card">
+          <h2 className="card-title">Invite New Admin</h2>
+          <form onSubmit={handleInvite} className="space-y-4">
             <div className="form-group">
               <label>Email</label>
               <input
@@ -72,35 +91,52 @@ const AdminManage = () => {
               />
             </div>
             <div className="form-group">
-              <label>Store ID</label>
-              <input
-                type="number"
+              <label>Store</label>
+              <select
                 value={inviteForm.store_id}
                 onChange={(e) => setInviteForm({ ...inviteForm, store_id: e.target.value })}
                 required
-              />
+              >
+                <option value="">Select a store</option>
+                {stores.map(store => (
+                  <option key={store.id} value={store.id}>{store.name}</option>
+                ))}
+              </select>
             </div>
-            <button type="submit">Invite Admin</button>
+            <button type="submit" className="button button-primary">
+              Invite Admin
+            </button>
           </form>
-          {error && <p className="error">{error}</p>}
-          <h2>Existing Admins</h2>
+        </div>
+
+        <div className="card">
+          <h2 className="card-title">Existing Admins</h2>
           <table>
             <thead>
               <tr>
                 <th>Name</th>
                 <th>Email</th>
-                <th>Store ID</th>
+                <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {admins.map((admin) => (
+              {admins.map(admin => (
                 <tr key={admin.id}>
                   <td>{admin.name}</td>
                   <td>{admin.email}</td>
-                  <td>{admin.store_id}</td>
                   <td>
-                    <button className="delete" onClick={() => handleDelete(admin.id)}>Delete</button>
+                    <span className={`status-badge ${admin.status === 'active' ? 'status-active' : 'status-inactive'}`}>
+                      {admin.status}
+                    </span>
+                  </td>
+                  <td className="space-x-2">
+                    {admin.status === 'active' ? (
+                      <button onClick={() => handleDeactivate(admin.id)} className="button-action">Deactivate</button>
+                    ) : (
+                      <button onClick={() => handleActivate(admin.id)} className="button-action">Activate</button>
+                    )}
+                    <button onClick={() => handleDelete(admin.id)} className="button-action text-red-600">Delete</button>
                   </td>
                 </tr>
               ))}
@@ -112,4 +148,4 @@ const AdminManage = () => {
   );
 };
 
-export default AdminManage;
+export default AdminManagement;

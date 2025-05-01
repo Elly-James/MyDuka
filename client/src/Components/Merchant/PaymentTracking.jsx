@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../../utils/api';
+import { api, handleApiError } from '../utils/api';
+import SideBar from './SideBar';
 import './merchant.css';
 
 const PaymentTracking = () => {
@@ -16,8 +17,9 @@ const PaymentTracking = () => {
     try {
       const response = await api.get('/api/inventory/suppliers/unpaid');
       setSuppliers(response.data.suppliers || []);
+      setError('');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch unpaid suppliers');
+      handleApiError(err, setError);
     }
   };
 
@@ -25,46 +27,50 @@ const PaymentTracking = () => {
     try {
       await api.post(`/api/inventory/suppliers/pay/${supplierId}`);
       fetchUnpaidSuppliers();
+      setError('');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to process payment');
+      handleApiError(err, setError);
     }
   };
 
   return (
     <div className="merchant-container">
-      <div className="sidebar">
-        <h3>Merchant Dashboard</h3>
-        <a onClick={() => navigate('/merchant/dashboard')}>Dashboard</a>
-        <a onClick={() => navigate('/merchant/admin-management')}>Admin Management</a>
-        <a onClick={() => navigate('/merchant/payment-tracking')}>Payment Tracking</a>
-        <a onClick={() => navigate('/merchant/store-reports')}>Store Reports</a>
-      </div>
+      <SideBar />
       <div className="main-content">
-        <div className="payment-tracking">
-          <h1>Payment Tracking</h1>
-          <table>
-            <thead>
-              <tr>
-                <th>Supplier ID</th>
-                <th>Name</th>
-                <th>Amount Due</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {suppliers.map((supplier) => (
-                <tr key={supplier.id}>
-                  <td>{supplier.id}</td>
-                  <td>{supplier.name}</td>
-                  <td>{supplier.amount_due}</td>
-                  <td>
-                    <button className="pay" onClick={() => handlePay(supplier.id)}>Pay</button>
-                  </td>
+        {error && <p className="error">{error}</p>}
+        <div className="card">
+          <h2 className="card-title">Unpaid Suppliers</h2>
+          {suppliers.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>Supplier ID</th>
+                  <th>Name</th>
+                  <th>Amount Due</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {error && <p className="error">{error}</p>}
+              </thead>
+              <tbody>
+                {suppliers.map((supplier) => (
+                  <tr key={supplier.id}>
+                    <td>{supplier.id}</td>
+                    <td>{supplier.name}</td>
+                    <td>{supplier.amount_due}</td>
+                    <td>
+                      <button
+                        onClick={() => handlePay(supplier.id)}
+                        className="button button-primary"
+                      >
+                        Pay
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="text-gray-500">No unpaid suppliers found.</p>
+          )}
         </div>
       </div>
     </div>

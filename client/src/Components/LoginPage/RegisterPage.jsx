@@ -1,33 +1,43 @@
+// src/Components/LoginPage/RegisterPage.jsx
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import api from '../../utils/api';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { api, handleApiError } from '../utils/api'; // Correct path
 import './login.css';
 
 const RegisterPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
   const query = new URLSearchParams(location.search);
-  const token = query.get('token'); // Invitation token from email link
+  const token = query.get('token');
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    if (!termsAccepted) {
+      setError('You must agree to the Terms & Conditions');
+      return;
+    }
     try {
-      await api.post('/api/auth/register', { email, password, name, token });
-      navigate('/login');
+      await api.post('/api/auth/register', { email, password, token });
+      navigate('/login', { state: { message: 'Registration successful! Please log in.' } });
     } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed');
+      handleApiError(err, setError);
     }
   };
 
   return (
-    <div className="register-container">
-      <div className="form-box">
+    <div className="login-container">
+      <div className="form-section centered">
         <h2>Register</h2>
-        <form onSubmit={handleRegister}>
+        <form onSubmit={handleRegister} className="auth-form">
           <input
             type="email"
             value={email}
@@ -35,25 +45,50 @@ const RegisterPage = () => {
             placeholder="Email"
             required
           />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            required
-          />
+          <div className="password-wrapper">
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
+              required
+            />
+            <span className="eye-icon"></span>
+          </div>
+          <div className="password-wrapper">
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirm password"
+              required
+            />
+            <span className="eye-icon"></span>
+          </div>
           <input
             type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Name"
+            value={token || ''}
+            onChange={(e) => setError('Token should be provided via URL')}
+            placeholder="Invitation token"
             required
+            disabled
           />
-          <button type="submit">Register</button>
+          <label className="terms-checkbox">
+            <input
+              type="checkbox"
+              checked={termsAccepted}
+              onChange={(e) => setTermsAccepted(e.target.checked)}
+            />
+            I agree to the <span>Terms & Conditions</span>
+          </label>
+          <button type="submit" className="submit-button">
+            Register
+          </button>
         </form>
         {error && <p className="error">{error}</p>}
-        <p>
-          Already have an account? <Link to="/login">Login</Link>
+        <p className="toggle-text">
+          Already have an account?{' '}
+          <Link to="/login" className="toggle-link">Login</Link>
         </p>
       </div>
     </div>
