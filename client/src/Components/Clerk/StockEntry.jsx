@@ -98,7 +98,7 @@ const StockEntry = () => {
           <option value="UNPAID">Unpaid</option>
         </select>
 
-        {/* Spoilage Count Input */}
+        {/* The Spoilage Count Input */}
         <input
           type="number"
           name="spoilage_count"
@@ -107,7 +107,7 @@ const StockEntry = () => {
           onChange={handleChange}
         />
 
-        {/* Submit Button */}
+        {/* The Submit Button */}
         <button type="submit">Submit</button>
       </form>
     </div>
