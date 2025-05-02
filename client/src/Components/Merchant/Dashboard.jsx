@@ -76,10 +76,9 @@ const Dashboard = () => {
   };
 
   const chartData = salesData || {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
+    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     datasets: [
-      { label: 'Sales', data: [65, 59, 80, 81, 56], backgroundColor: '#2E3A8C' },
-      { label: 'Spoilage', data: [28, 48, 40, 19, 86], backgroundColor: '#FF6B6B' },
+      { label: 'Sales', data: [20000, 40000, 30000, 60000, 70000, 50000, 80000], borderColor: '#2E3A8C', tension: 0.4, fill: false },
     ],
   };
 
@@ -87,63 +86,54 @@ const Dashboard = () => {
     <div className="merchant-container">
       <SideBar />
       <div className="main-content">
-        {error && <p className="error">{error}</p>}
-
-        <div className="dashboard-grid">
-          <div className="card">
-            <h2 className="card-title">Monthly Sales vs. Spoilage</h2>
-            <Bar data={chartData} options={{ responsive: true }} />
-          </div>
-          <div className="stats-container">
-            <div className="card stat-card">
-              <h2 className="stat-title">Unpaid Suppliers</h2>
-              <p className="stat-value">{unpaidSuppliers}</p>
-            </div>
-            <div className="card stat-card">
-              <h2 className="stat-title">Low Stock Alerts</h2>
-              <p className="stat-value">{lowStockAlerts}</p>
-            </div>
-          </div>
-        </div>
+        {error && <p className="text-red-500 mb-4">{error}</p>}
 
         <div className="card">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="card-title">Admin Management</h2>
-            <button onClick={handleAddAdmin} className="button button-primary">
-              + Add Admin
-            </button>
+          <h2 className="card-title">Reports</h2>
+          <div className="flex justify-between mb-4">
+            <div className="flex gap-4">
+              <button className="button button-primary active">Weekly</button>
+              <button className="button button-primary">Monthly</button>
+              <button className="button button-primary">Annual</button>
+            </div>
+            <button className="button button-primary">EXPORT PDF</button>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {admins.map(admin => (
-                <tr key={admin.id}>
-                  <td>{admin.name}</td>
-                  <td>{admin.email}</td>
-                  <td>
-                    <span className={`status-badge ${admin.status === 'active' ? 'status-active' : 'status-inactive'}`}>
-                      {admin.status}
-                    </span>
-                  </td>
-                  <td className="space-x-2">
-                    {admin.status === 'active' ? (
-                      <button onClick={() => handleDeactivate(admin.id)} className="button-action">Deactivate</button>
-                    ) : (
-                      <button onClick={() => handleActivate(admin.id)} className="button-action">Activate</button>
-                    )}
-                    <button onClick={() => handleDelete(admin.id)} className="button-action text-red-600">Delete</button>
-                  </td>
+          <div className="mb-6">
+            <Bar data={chartData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
+          </div>
+          <div className="card">
+            <h3 className="text-lg font-semibold text-gray-700 mb-4">Top Selling Products</h3>
+            <table className="table w-full">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Units Sold</th>
+                  <th>Revenue (KSh)</th>
+                  <th>Growth</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Rice (5kg)</td>
+                  <td>215</td>
+                  <td>107,500</td>
+                  <td className="text-green-600">+15%</td>
+                </tr>
+                <tr>
+                  <td>Milk (500ml)</td>
+                  <td>189</td>
+                  <td>11,340</td>
+                  <td className="text-green-600">+8%</td>
+                </tr>
+                <tr>
+                  <td>Sugar (1kg)</td>
+                  <td>146</td>
+                  <td>17,520</td>
+                  <td className="text-red-600">-3%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

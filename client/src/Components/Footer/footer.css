@@ -1,60 +1,90 @@
+/* Enhanced footer.css */
+
 .footer {
-    background-color: #2E3A8C;
-    color: white;
-    padding: 1.5rem 0;
-    width: 100%;
-    margin-top: auto;
-    border-top: 2px solid #1e2a6b;
-  }
-  
+  background-color: #2E3A8C;
+  color: white;
+  padding: 1.5rem 0;
+  width: 100%;
+  margin-top: auto;
+  border-top: 2px solid #1e2a6b;
+}
+
+.footer-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.footer-container p {
+  font-size: 0.95rem;
+  font-weight: 400;
+  opacity: 0.9;
+}
+
+.footer-links {
+  display: flex;
+  gap: 2rem;
+}
+
+.footer-link {
+  color: white;
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 400;
+  transition: color 0.2s ease;
+  opacity: 0.9;
+  position: relative;
+}
+
+.footer-link:hover {
+  color: #FF6B6B;
+  opacity: 1;
+}
+
+.footer-link::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background-color: #FF6B6B;
+  transition: width 0.2s ease;
+}
+
+.footer-link:hover::after {
+  width: 100%;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
   .footer-container {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 0 1.5rem;
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .footer-links {
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .footer {
+    padding: 1.25rem 0;
   }
   
-  .footer-container p {
-    font-size: 0.95rem;
-    font-weight: 400;
+  .footer-container p,
+  .footer-link {
+    font-size: 0.85rem;
   }
   
   .footer-links {
-    display: flex;
-    gap: 2rem;
+    gap: 1rem;
   }
-  
-  .footer-link {
-    color: white;
-    text-decoration: none;
-    font-size: 0.95rem;
-    font-weight: 400;
-    transition: color 0.3s ease;
-  }
-  
-  .footer-link:hover {
-    color: #FF6B6B;
-  }
-  
-  /* Responsive adjustments */
-  @media (max-width: 768px) {
-    .footer-container {
-      flex-direction: column;
-      gap: 1rem;
-    }
-  
-    .footer-links {
-      gap: 1rem;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-  }
-  
-  @media (max-width: 480px) {
-    .footer-container p,
-    .footer-link {
-      font-size: 0.85rem;
-    }
-  }
+}

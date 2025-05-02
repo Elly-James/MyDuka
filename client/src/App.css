@@ -1,3 +1,23 @@
+/* Enhanced app.css */
+
+/* Base reset */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #374151;
+  background-color: #F3F4F6;
+  line-height: 1.5;
+}
+
+/* Main app structure */
 .app-container {
   display: flex;
   flex-direction: column;
@@ -9,19 +29,39 @@
   padding-top: 4rem; /* Space for the fixed NavBar */
 }
 
-/* Ensure the body doesn't have default margins */
-body {
-  margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 0;
+  color: #111827;
+  line-height: 1.2;
 }
 
-/* Remove unused styles */
-#root {
-  margin: 0;
-  padding: 0;
-  text-align: left;
+p {
+  margin-bottom: 1rem;
 }
 
+a {
+  color: #2E3A8C;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: #1E2A6B;
+}
+
+/* Form elements */
+input, select, textarea, button {
+  font-family: inherit;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: #2E3A8C;
+  box-shadow: 0 0 0 2px rgba(46, 58, 140, 0.1);
+}
+
+/* Error boundary */
 .error-boundary {
   display: flex;
   flex-direction: column;
@@ -30,29 +70,122 @@ body {
   height: 100vh;
   text-align: center;
   padding: 2rem;
+  background-color: #FEF2F2;
 }
 
 .error-boundary h1 {
   font-size: 2rem;
-  color: #ef4444;
+  color: #DC2626;
   margin-bottom: 1rem;
 }
 
 .error-boundary p {
   font-size: 1rem;
-  color: #4b5563;
-  margin-bottom: 1rem;
+  color: #4B5563;
+  margin-bottom: 1.5rem;
+  max-width: 600px;
 }
 
 .error-boundary button {
-  background-color: #3b82f6;
+  background-color: #2E3A8C;
   color: white;
   padding: 0.75rem 1.5rem;
-  border-radius: 0.25rem;
+  border-radius: 0.375rem;
   border: none;
   cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
 }
 
 .error-boundary button:hover {
-  background-color: #2563eb;
+  background-color: #1E2A6B;
+}
+
+/* Utility classes */
+.text-center {
+  text-align: center;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.shadow {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.shadow-lg {
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+}
+
+.rounded {
+  border-radius: 0.375rem;
+}
+
+.rounded-full {
+  border-radius: 9999px;
+}
+
+/* Colors */
+.text-primary {
+  color: #2E3A8C;
+}
+
+.text-danger {
+  color: #DC2626;
+}
+
+.text-success {
+  color: #10B981;
+}
+
+.text-warning {
+  color: #FBBF24;
+}
+
+.bg-primary {
+  background-color: #2E3A8C;
+}
+
+.bg-danger {
+  background-color: #DC2626;
+}
+
+.bg-success {
+  background-color: #10B981;
+}
+
+.bg-warning {
+  background-color: #FBBF24;
+}
+
+/* Container widths */
+.container {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F3F4F6;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
 }
