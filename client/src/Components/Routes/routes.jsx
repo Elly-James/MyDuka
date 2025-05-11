@@ -1,16 +1,16 @@
-import React, { useContext } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { useContext } from 'react';
 
 // Components
 import LoginPage from '../LoginPage/LoginPage.jsx';
-import RegisterPage from '../LoginPage/RegisterPage.jsx';
 import ForgotPassword from '../LoginPage/ForgotPassword.jsx';
 import ResetPassword from '../LoginPage/ResetPassword.jsx';
 
 // Merchant Components
 import MerchantDashboard from '../Merchant/Dashboard.jsx';
-import AdminManage from '../Merchant/AdminManagement.jsx';
+import AdminManagement from '../Merchant/AdminManagement.jsx';
 import PaymentTracking from '../Merchant/PaymentTracking.jsx';
 import StoreReports from '../Merchant/StoreReports.jsx';
 
@@ -27,37 +27,59 @@ import ActivityLog from '../Clerk/ActivityLog.jsx';
 import StockAlerts from '../Clerk/StockAlerts.jsx';
 import StockEntry from '../Clerk/StockEntry.jsx';
 
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6">
+          <h2 className="text-2xl font-bold text-red-600">Something went wrong.</h2>
+          <p>{this.state.error?.message || 'An unexpected error occurred.'}</p>
+          <button
+            className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg"
+            onClick={() => window.location.reload()}
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useContext(AuthContext);
-  console.log('ProtectedRoute - user:', user, 'loading:', loading);
+  const location = useLocation();
+
   if (loading) {
-    console.log('ProtectedRoute - Still loading, showing loading screen');
     return <div>Loading...</div>;
   }
   if (!user) {
-    console.log('ProtectedRoute - No user, redirecting to /login');
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
   if (!allowedRoles.includes(user.role)) {
-    console.log(`ProtectedRoute - Role ${user.role} not allowed for ${allowedRoles}, redirecting to /login`);
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
-  console.log('ProtectedRoute - Access granted, rendering children');
   return children;
 };
 
 const AppRoutes = () => {
-  const { loading } = useContext(AuthContext);
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
   return (
     <Routes>
       {/* Public Routes */}
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/" element={<LoginPage />} />
@@ -67,7 +89,9 @@ const AppRoutes = () => {
         path="/merchant/dashboard"
         element={
           <ProtectedRoute allowedRoles={['MERCHANT']}>
-            <MerchantDashboard />
+            <ErrorBoundary>
+              <MerchantDashboard />
+            </ErrorBoundary>
           </ProtectedRoute>
         }
       />
@@ -75,7 +99,9 @@ const AppRoutes = () => {
         path="/merchant/admin-management"
         element={
           <ProtectedRoute allowedRoles={['MERCHANT']}>
-            <AdminManage />
+            <ErrorBoundary>
+              <AdminManagement />
+            </ErrorBoundary>
           </ProtectedRoute>
         }
       />
@@ -83,7 +109,9 @@ const AppRoutes = () => {
         path="/merchant/payment-tracking"
         element={
           <ProtectedRoute allowedRoles={['MERCHANT']}>
-            <PaymentTracking />
+            <ErrorBoundary>
+              <PaymentTracking />
+            </ErrorBoundary>
           </ProtectedRoute>
         }
       />
@@ -91,7 +119,9 @@ const AppRoutes = () => {
         path="/merchant/store-reports"
         element={
           <ProtectedRoute allowedRoles={['MERCHANT']}>
-            <StoreReports />
+            <ErrorBoundary>
+              <StoreReports />
+            </ErrorBoundary>
           </ProtectedRoute>
         }
       />
@@ -101,7 +131,9 @@ const AppRoutes = () => {
         path="/admin/dashboard"
         element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
-            <AdminDashboard />
+            <ErrorBoundary>
+              <AdminDashboard />
+            </ErrorBoundary>
           </ProtectedRoute>
         }
       />
@@ -109,7 +141,9 @@ const AppRoutes = () => {
         path="/admin/clerk-management"
         element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
-            <ClerkManagement />
+            <ErrorBoundary>
+              <ClerkManagement />
+            </ErrorBoundary>
           </ProtectedRoute>
         }
       />
@@ -117,7 +151,9 @@ const AppRoutes = () => {
         path="/admin/inventory"
         element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
-            <InventoryOverview />
+            <ErrorBoundary>
+              <InventoryOverview />
+            </ErrorBoundary>
           </ProtectedRoute>
         }
       />
@@ -125,7 +161,9 @@ const AppRoutes = () => {
         path="/admin/payments"
         element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
-            <AdminPayments />
+            <ErrorBoundary>
+              <AdminPayments />
+            </ErrorBoundary>
           </ProtectedRoute>
         }
       />
@@ -133,7 +171,9 @@ const AppRoutes = () => {
         path="/admin/reports"
         element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
-            <AdminReports />
+            <ErrorBoundary>
+              <AdminReports />
+            </ErrorBoundary>
           </ProtectedRoute>
         }
       />
@@ -141,7 +181,9 @@ const AppRoutes = () => {
         path="/admin/supply-requests"
         element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
-            <SupplyRequests />
+            <ErrorBoundary>
+              <SupplyRequests />
+            </ErrorBoundary>
           </ProtectedRoute>
         }
       />
@@ -151,7 +193,9 @@ const AppRoutes = () => {
         path="/clerk/activity-log"
         element={
           <ProtectedRoute allowedRoles={['CLERK']}>
-            <ActivityLog />
+            <ErrorBoundary>
+              <ActivityLog />
+            </ErrorBoundary>
           </ProtectedRoute>
         }
       />
@@ -159,7 +203,9 @@ const AppRoutes = () => {
         path="/clerk/stock-alerts"
         element={
           <ProtectedRoute allowedRoles={['CLERK']}>
-            <StockAlerts />
+            <ErrorBoundary>
+              <StockAlerts />
+            </ErrorBoundary>
           </ProtectedRoute>
         }
       />
@@ -167,7 +213,9 @@ const AppRoutes = () => {
         path="/clerk/stock-entry"
         element={
           <ProtectedRoute allowedRoles={['CLERK']}>
-            <StockEntry />
+            <ErrorBoundary>
+              <StockEntry />
+            </ErrorBoundary>
           </ProtectedRoute>
         }
       />

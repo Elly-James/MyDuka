@@ -1,32 +1,50 @@
-import React, { useContext } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
+import { logout } from '../store/slices/authSlice';
 import './merchant.css';
 
 const SideBar = () => {
-  const navigate = useNavigate();
-  const { logout } = useContext(AuthContext);
+  const dispatch = useDispatch();
   const location = useLocation();
 
-  const isActive = (path) => location.pathname === path ? 'active' : '';
+  const isActive = (path) => (location.pathname === path ? 'active' : '');
+
+  const handleLogout = () => {
+    dispatch(logout());
+  };
 
   return (
     <aside className="sidebar">
       <h3 className="sidebar-title">MyDuka</h3>
       <nav className="sidebar-nav">
-        <button onClick={() => navigate('/merchant/dashboard')} className={`sidebar-link ${isActive('/merchant/dashboard')}`}>
-          Dashboard
+        <Link
+          to="/merchant/dashboard"
+          className={`sidebar-link ${isActive('/merchant/dashboard')}`}
+        >
+          <span className="sidebar-icon">📊</span> Dashboard
+        </Link>
+        <Link
+          to="/merchant/admin-management"
+          className={`sidebar-link ${isActive('/merchant/admin-management')}`}
+        >
+          <span className="sidebar-icon">👥</span> Admin Management
+        </Link>
+        <Link
+          to="/merchant/store-reports"
+          className={`sidebar-link ${isActive('/merchant/store-reports')}`}
+        >
+          <span className="sidebar-icon">📋</span> Store Reports
+        </Link>
+        <Link
+          to="/merchant/payment-tracking"
+          className={`sidebar-link ${isActive('/merchant/payment-tracking')}`}
+        >
+          <span className="sidebar-icon">💰</span> Payment Tracking
+        </Link>
+        <button onClick={handleLogout} className="sidebar-logout">
+          <span className="sidebar-icon">🚪</span> Logout
         </button>
-        <button onClick={() => navigate('/merchant/admin-management')} className={`sidebar-link ${isActive('/merchant/admin-management')}`}>
-          Admin Management
-        </button>
-        <button onClick={() => navigate('/merchant/store-reports')} className={`sidebar-link ${isActive('/merchant/store-reports')}`}>
-          Store Reports
-        </button>
-        <button onClick={() => navigate('/merchant/payment-tracking')} className={`sidebar-link ${isActive('/merchant/payment-tracking')}`}>
-          Payment Tracking
-        </button>
-        <button onClick={logout} className="sidebar-logout">Logout</button>
       </nav>
     </aside>
   );

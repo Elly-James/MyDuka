@@ -4,9 +4,10 @@ import { AuthContext } from '../context/AuthContext';
 import './navbar.css';
 
 const NavBar = () => {
-  const { user, logout } = useContext(AuthContext);
+  const { user, logout, loading } = useContext(AuthContext);
   const navigate = useNavigate();
 
+  if (loading) return null; // Wait until loading is complete
   if (!user) return null; // Don't show NavBar on public pages (e.g., login)
 
   return (

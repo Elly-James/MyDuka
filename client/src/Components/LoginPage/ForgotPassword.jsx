@@ -1,7 +1,6 @@
-// src/Components/LoginPage/ForgotPassword.jsx
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, handleApiError } from '../utils/api'; // Correct path
+import { api, handleApiError, ROUTES } from '../utils/api';
 import './login.css';
 
 const ForgotPassword = () => {
@@ -11,13 +10,15 @@ const ForgotPassword = () => {
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
+    setMessage('');
+    setError('');
     try {
       const response = await api.post('/api/auth/forgot-password', { email });
+      console.log('Forgot Password Response:', response.data);
       setMessage(response.data.message || 'Password reset email sent');
-      setError('');
     } catch (err) {
-      handleApiError(err, setError);
-      setMessage('');
+      const errorMessage = handleApiError(err, setError);
+      console.error('Forgot Password Error:', errorMessage);
     }
   };
 
@@ -40,7 +41,7 @@ const ForgotPassword = () => {
         {message && <p className="success">{message}</p>}
         {error && <p className="error">{error}</p>}
         <p className="toggle-text">
-          Back to <Link to="/login" className="toggle-link">Login</Link>
+          Back to <Link to={ROUTES.LOGIN} className="toggle-link">Login</Link>
         </p>
       </div>
     </div>

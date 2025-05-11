@@ -1,7 +1,6 @@
-// src/Components/LoginPage/RegisterPage.jsx
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { api, handleApiError } from '../utils/api'; // Correct path
+import { api, handleApiError, ROUTES } from '../utils/api';
 import './login.css';
 
 const RegisterPage = () => {
@@ -13,10 +12,11 @@ const RegisterPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const query = new URLSearchParams(location.search);
-  const token = query.get('token');
+  const token = query.get('token') || '';
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    setError('');
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -26,10 +26,12 @@ const RegisterPage = () => {
       return;
     }
     try {
-      await api.post('/api/auth/register', { email, password, token });
-      navigate('/login', { state: { message: 'Registration successful! Please log in.' } });
+      const response = await api.post('/api/auth/register', { email, password, token });
+      console.log('Register Response:', response.data);
+      navigate(ROUTES.LOGIN, { state: { message: 'Registration successful! Please log in.' } });
     } catch (err) {
-      handleApiError(err, setError);
+      const errorMessage = handleApiError(err, setError);
+      console.error('Register Error:', errorMessage);
     }
   };
 
@@ -67,7 +69,7 @@ const RegisterPage = () => {
           </div>
           <input
             type="text"
-            value={token || ''}
+            value={token}
             onChange={(e) => setError('Token should be provided via URL')}
             placeholder="Invitation token"
             required
@@ -87,8 +89,7 @@ const RegisterPage = () => {
         </form>
         {error && <p className="error">{error}</p>}
         <p className="toggle-text">
-          Already have an account?{' '}
-          <Link to="/login" className="toggle-link">Login</Link>
+          Already have an account? <Link to={ROUTES.LOGIN} className="toggle-link">Login</Link>
         </p>
       </div>
     </div>

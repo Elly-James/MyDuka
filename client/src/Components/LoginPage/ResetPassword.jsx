@@ -1,7 +1,6 @@
-// src/Components/LoginPage/ResetPassword.jsx
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { api, handleApiError } from '../utils/api'; // Correct path
+import { api, handleApiError, ROUTES } from '../utils/api';
 import './login.css';
 
 const ResetPassword = () => {
@@ -16,18 +15,20 @@ const ResetPassword = () => {
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
+    setMessage('');
+    setError('');
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
     try {
       const response = await api.post('/api/auth/reset-password', { token, password });
+      console.log('Reset Password Response:', response.data);
       setMessage(response.data.message || 'Password reset successfully');
-      setError('');
-      setTimeout(() => navigate('/login'), 2000);
+      setTimeout(() => navigate(ROUTES.LOGIN), 2000);
     } catch (err) {
-      handleApiError(err, setError);
-      setMessage('');
+      const errorMessage = handleApiError(err, setError);
+      console.error('Reset Password Error:', errorMessage);
     }
   };
 
@@ -50,7 +51,7 @@ const ResetPassword = () => {
             <input
               type="password"
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="Confirm Password"
               required
             />
@@ -63,7 +64,7 @@ const ResetPassword = () => {
         {message && <p className="success">{message}</p>}
         {error && <p className="error">{error}</p>}
         <p className="toggle-text">
-          Back to <Link to="/login" className="toggle-link">Login</Link>
+          Back to <Link to={ROUTES.LOGIN} className="toggle-link">Login</Link>
         </p>
       </div>
     </div>

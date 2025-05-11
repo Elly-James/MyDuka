@@ -1,4 +1,3 @@
-# config.py
 import os
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -21,7 +20,7 @@ class Config:
     MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'true').lower() == 'true'
     MAIL_USERNAME = os.getenv('MAIL_USERNAME')
     MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
-    MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', 'noreply@myduka.com')
+    MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', os.getenv('MAIL_USERNAME', 'noreply@myduka.com'))
     INVITATION_EXPIRY = timedelta(days=int(os.getenv('INVITATION_EXPIRY_DAYS', 7)))
     LIMITER_STORAGE_URI = os.getenv('LIMITER_STORAGE_URI', 'memory://')
     CACHE_REDIS_URL = os.getenv('CACHE_REDIS_URL', 'redis://localhost:6379/0')
@@ -29,11 +28,14 @@ class Config:
     GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
     GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:5000/api/auth/google/callback')
     SOCKETIO_MESSAGE_QUEUE = os.getenv('SOCKETIO_MESSAGE_QUEUE', None)
-    CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*')  # Restrict in production
+    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:5173')
+    SOCKETIO_CORS_ORIGINS = os.getenv('SOCKETIO_CORS_ORIGINS', 'http://localhost:5173')
 
 class DevelopmentConfig(Config):
     DEBUG = True
     SQLALCHEMY_ECHO = True
+    CORS_ORIGINS = 'http://localhost:5173'
+    SOCKETIO_CORS_ORIGINS = 'http://localhost:5173'
 
 class TestingConfig(Config):
     TESTING = True
@@ -42,11 +44,14 @@ class TestingConfig(Config):
         raise ValueError("TEST_DATABASE_URL environment variable is not set")
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=5)
     WTF_CSRF_ENABLED = False
+    CORS_ORIGINS = 'http://localhost:5173'
+    SOCKETIO_CORS_ORIGINS = 'http://localhost:5173'
 
 class ProductionConfig(Config):
     DEBUG = False
     SQLALCHEMY_ECHO = False
-    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'https://your-frontend-domain.com')  # Set in production
+    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'https://your-frontend-domain.com')
+    SOCKETIO_CORS_ORIGINS = os.getenv('SOCKETIO_CORS_ORIGINS', 'https://your-frontend-domain.com')
 
 config = {
     'development': DevelopmentConfig,
