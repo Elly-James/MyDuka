@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import api from '../../utils/api';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { api, handleApiError, ROUTES } from '../utils/api';
 import './login.css';
 
 const ResetPassword = () => {
@@ -15,44 +15,57 @@ const ResetPassword = () => {
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
+    setMessage('');
+    setError('');
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
     try {
       const response = await api.post('/api/auth/reset-password', { token, password });
+      console.log('Reset Password Response:', response.data);
       setMessage(response.data.message || 'Password reset successfully');
-      setError('');
-      setTimeout(() => navigate('/login'), 2000);
+      setTimeout(() => navigate(ROUTES.LOGIN), 2000);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to reset password');
-      setMessage('');
+      const errorMessage = handleApiError(err, setError);
+      console.error('Reset Password Error:', errorMessage);
     }
   };
 
   return (
-    <div className="reset-password-container">
-      <div className="form-box">
+    <div className="login-container">
+      <div className="form-section centered">
         <h2>Reset Password</h2>
-        <form onSubmit={handleResetPassword}>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="New Password"
-            required
-          />
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Confirm Password"
-            required
-          />
-          <button type="submit">Reset Password</button>
+        <form onSubmit={handleResetPassword} className="auth-form">
+          <div className="password-wrapper">
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="New Password"
+              required
+            />
+            <span className="eye-icon"></span>
+          </div>
+          <div className="password-wrapper">
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Confirm Password"
+              required
+            />
+            <span className="eye-icon"></span>
+          </div>
+          <button type="submit" className="submit-button">
+            Reset Password
+          </button>
         </form>
-        {message && <p>{message}</p>}
+        {message && <p className="success">{message}</p>}
         {error && <p className="error">{error}</p>}
+        <p className="toggle-text">
+          Back to <Link to={ROUTES.LOGIN} className="toggle-link">Login</Link>
+        </p>
       </div>
     </div>
   );

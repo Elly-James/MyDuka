@@ -1,42 +1,43 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply m-0 font-sans text-gray-700 bg-gray-100 antialiased;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.app-container {
+  @apply flex flex-col min-h-screen;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.content-wrapper {
+  @apply flex-1 pt-16;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+h1, h2, h3, h4, h5, h6 {
+  @apply mt-0 text-gray-900;
 }
 
-.card {
-  padding: 2em;
+p {
+  @apply mb-4;
 }
 
-.read-the-docs {
-  color: #888;
+a {
+  @apply text-blue-900 no-underline transition-colors hover:text-blue-700;
+}
+
+.error-boundary {
+  @apply flex flex-col items-center justify-center h-screen text-center p-8 bg-red-50;
+}
+
+.error-boundary h1 {
+  @apply text-3xl text-red-600 mb-4;
+}
+
+.error-boundary p {
+  @apply text-base text-gray-600 mb-6 max-w-prose;
+}
+
+.error-boundary button {
+  @apply bg-blue-900 text-white px-6 py-3 rounded-lg border-none cursor-pointer font-medium transition-colors hover:bg-blue-700;
 }

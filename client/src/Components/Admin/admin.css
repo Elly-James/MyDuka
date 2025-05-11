@@ -1,0 +1,67 @@
+/* src/Components/Admin/admin.css */
+.flex {
+    display: flex;
+  }
+  
+  .h-screen {
+    height: 100vh;
+  }
+  
+  .bg-gray-100 {
+    background-color: #f7fafc;
+  }
+  
+  .w-64 {
+    width: 16rem;
+  }
+  
+  .bg-gray-800 {
+    background-color: #2d3748;
+  }
+  
+  .text-white {
+    color: #ffffff;
+  }
+  
+  .sidebar {
+    width: 16rem;
+    background-color: #2d3748;
+    color: #ffffff;
+    height: 100%;
+  }
+  
+  .sidebar h3 {
+    font-size: 1.25rem;
+    font-weight: bold;
+    padding: 1rem;
+  }
+  
+  .sidebar nav a {
+    display: block;
+    padding: 1rem;
+    cursor: pointer;
+  }
+  
+  .sidebar nav a:hover {
+    background-color: #4a5568;
+  }
+  
+  .flex-1 {
+    flex: 1;
+  }
+  
+  .p-6 {
+    padding: 1.5rem;
+  }
+  
+  .text-2xl {
+    font-size: 1.5rem;
+  }
+  
+  .font-bold {
+    font-weight: 700;
+  }
+  
+  .mb-6 {
+    margin-bottom: 1.5rem;
+  }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../../utils/api';
+import { api, handleApiError, ROUTES } from '../utils/api';
 import './login.css';
 
 const ForgotPassword = () => {
@@ -10,21 +10,23 @@ const ForgotPassword = () => {
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
+    setMessage('');
+    setError('');
     try {
       const response = await api.post('/api/auth/forgot-password', { email });
+      console.log('Forgot Password Response:', response.data);
       setMessage(response.data.message || 'Password reset email sent');
-      setError('');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to send reset email');
-      setMessage('');
+      const errorMessage = handleApiError(err, setError);
+      console.error('Forgot Password Error:', errorMessage);
     }
   };
 
   return (
-    <div className="forgot-password-container">
-      <div className="form-box">
+    <div className="login-container">
+      <div className="form-section centered">
         <h2>Forgot Password</h2>
-        <form onSubmit={handleForgotPassword}>
+        <form onSubmit={handleForgotPassword} className="auth-form">
           <input
             type="email"
             value={email}
@@ -32,12 +34,14 @@ const ForgotPassword = () => {
             placeholder="Enter your email"
             required
           />
-          <button type="submit">Send Reset Link</button>
+          <button type="submit" className="submit-button">
+            Send Reset Link
+          </button>
         </form>
-        {message && <p>{message}</p>}
+        {message && <p className="success">{message}</p>}
         {error && <p className="error">{error}</p>}
-        <p>
-          Back to <Link to="/login">Login</Link>
+        <p className="toggle-text">
+          Back to <Link to={ROUTES.LOGIN} className="toggle-link">Login</Link>
         </p>
       </div>
     </div>
