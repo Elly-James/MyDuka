@@ -1,22 +1,24 @@
 .navbar {
-  background-color: #1e3a8a; /* Equivalent to bg-blue-900 */
-  color: #ffffff; /* Equivalent to text-white */
-  padding: 0.75rem; /* 12px = 0.75rem */
+  background-color: #2C3E50; /* Dark blue-gray background */
+  color: #ffffff;
+  padding: 0.75rem;
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
+  height: 4rem; /* Fixed height to match sidebar */
   z-index: 50;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Equivalent to shadow-md */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .navbar-container {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  max-width: 80rem; /* 1280px = 80rem */
+  max-width: 100%;
+  height: 100%;
   margin: 0 auto;
-  padding-left: 1.5rem; /* 24px = 1.5rem */
+  padding-left: 1.5rem;
   padding-right: 1.5rem;
 }
 
