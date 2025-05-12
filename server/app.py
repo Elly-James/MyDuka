@@ -8,7 +8,10 @@ from config import config
 from models import User
 
 # Configure root logger
-logging.basicConfig(level=logging.ERROR if os.getenv('FLASK_ENV') == 'production' else logging.INFO)
+logging.basicConfig(
+    level=logging.ERROR if os.getenv('FLASK_ENV') == 'production' else logging.INFO,
+    format='%(asctime)s %(levelname)s:%(name)s:%(message)s'
+)
 logger = logging.getLogger(__name__)
 
 def create_app(config_name='development'):
@@ -37,7 +40,8 @@ def create_app(config_name='development'):
                 'origins': cors_origins,
                 'methods': ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
                 'allow_headers': ['Content-Type', 'Authorization', 'X-Requested-With'],
-                'supports_credentials': True
+                'supports_credentials': True,
+                'expose_headers': ['Content-Type', 'Authorization']
             }
         })
         
@@ -52,6 +56,7 @@ def create_app(config_name='development'):
                 app,
                 async_mode='eventlet',
                 cors_allowed_origins=cors_origins,
+                path='/socket.io',
                 ping_timeout=10,
                 ping_interval=5,
                 reconnection=True,
@@ -62,7 +67,7 @@ def create_app(config_name='development'):
                 engineio_logger=True
             )
     except Exception as e:
-        logger.error(f'Failed to initialize extensions: {e}')
+        logger.error(f'Failed to initialize extensions: {str(e)}')
         raise
 
     # Register blueprints
@@ -82,21 +87,32 @@ def create_app(config_name='development'):
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(notifications_bp, url_prefix='/api/notifications')
 
+    # Handle OPTIONS requests for all /api/* routes
+    @app.route('/api/<path:path>', methods=['OPTIONS'])
+    def handle_options(path):
+        logger.info(f'Handling OPTIONS request for /api/{path} from {request.remote_addr}')
+        return '', 204, {
+            'Access-Control-Allow-Origin': 'http://localhost:5173',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+            'Access-Control-Allow-Credentials': 'true'
+        }
+
     # Middleware to log requests
     @app.before_request
     def log_request_info():
         logger.info(f'Request: {request.method} {request.url} from {request.remote_addr}')
 
-    # Apply global rate limit to the app (optional, can be moved to specific routes)
+    # Apply global rate limit to the app
     @app.after_request
     def apply_global_rate_limit(response):
-        limiter.limit("500 per day;100 per hour")(lambda: None)  # Dummy callable to satisfy limiter
+        limiter.limit("500 per day;100 per hour")(lambda: None)  # Dummy callable
         return response
 
     # Role-guarded dashboard routes
     @app.route('/merchant-dashboard')
     @jwt_required()
-    @limiter.limit("500 per day;100 per hour")  # Example rate limit per route
+    @limiter.limit("500 per day;100 per hour")
     def merchant_dashboard():
         if get_jwt_identity()['role'] != 'MERCHANT':
             abort(403, description='Merchant role required')
@@ -120,13 +136,13 @@ def create_app(config_name='development'):
 
     # Health check
     @app.route('/health')
-    @limiter.exempt  # Exempt health check from rate limiting
+    @limiter.exempt
     def health():
         try:
             db.session.execute('SELECT 1')
             return jsonify({'status': 'healthy', 'database': 'connected'})
         except Exception as e:
-            logger.error(f'Health check failed: {e}')
+            logger.error(f'Health check failed: {str(e)}')
             return jsonify({'status': 'unhealthy', 'database': 'disconnected'}), 500
 
     # Error handlers
@@ -185,6 +201,10 @@ def create_app(config_name='development'):
     @socketio.on_error_default
     def handle_socket_error(e):
         logger.error(f"WebSocket error: {str(e)}")
+
+    # Initialize database tables
+    with app.app_context():
+        db.create_all()
 
     logger.info(f'Application started with config: {config_name}')
     return app

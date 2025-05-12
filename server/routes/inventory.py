@@ -5,8 +5,8 @@ import logging
 
 from extensions import db, socketio
 from models import (
-    Product, InventoryEntry, Supplier, SupplyRequest, User, Store, 
-    UserRole, PaymentStatus, RequestStatus, ProductCategory, Notification, user_store
+    Product, InventoryEntry, Supplier, SupplyRequest, User, Store,
+    UserRole, PaymentStatus, RequestStatus, ProductCategory, Notification, user_store, ActivityLog, NotificationType
 )
 from schemas import ProductSchema, InventoryEntrySchema, SupplierSchema, SupplyRequestSchema
 
@@ -69,6 +69,7 @@ def manage_products():
         - category_id (int, optional): Category ID
         - min_stock_level (int, optional): Minimum stock level
         - current_stock (int, optional): Initial stock
+        - unit_price (float): Unit price
     """
     try:
         identity = get_jwt_identity()
@@ -167,28 +168,55 @@ def manage_products():
                 category_id=category_id,
                 store_id=data['store_id'],
                 min_stock_level=data.get('min_stock_level', 5),
-                current_stock=data.get('current_stock', 0)
+                current_stock=data.get('current_stock', 0),
+                unit_price=data['unit_price']
             )
 
             db.session.add(product)
             db.session.flush()
 
+            # Notify about new product
+            users_to_notify = db.session.query(User).filter(
+                user_store.c.user_id == User.id,
+                user_store.c.store_id == product.store_id,
+                User.role.in_([UserRole.ADMIN, UserRole.MERCHANT])
+            ).all()
+            for user in users_to_notify:
+                notification = Notification(
+                    user_id=user.id,
+                    message=f"New product '{product.name}' added to store.",
+                    type=NotificationType.PRODUCT_ADDED,
+                    related_entity_id=product.id,
+                    related_entity_type='Product'
+                )
+                db.session.add(notification)
+                db.session.flush()
+                socketio.emit('new_notification', {
+                    'id': notification.id,
+                    'message': notification.message,
+                    'type': notification.type.name,
+                    'related_entity_id': notification.related_entity_id,
+                    'related_entity_type': notification.related_entity_type,
+                    'created_at': notification.created_at.isoformat()
+                }, room=f'user_{user.id}')
+
             if product.current_stock <= product.min_stock_level:
-                users_to_notify = db.session.query(User).filter(
-                    user_store.c.user_id == User.id,
-                    user_store.c.store_id == product.store_id,
-                    User.role.in_([UserRole.ADMIN, UserRole.MERCHANT])
-                ).all()
                 for user in users_to_notify:
                     notification = Notification(
                         user_id=user.id,
-                        message=f"New product '{product.name}' added with low stock: {product.current_stock} units."
+                        message=f"New product '{product.name}' added with low stock: {product.current_stock} units.",
+                        type=NotificationType.LOW_STOCK,
+                        related_entity_id=product.id,
+                        related_entity_type='Product'
                     )
                     db.session.add(notification)
                     db.session.flush()
                     socketio.emit('new_notification', {
                         'id': notification.id,
                         'message': notification.message,
+                        'type': notification.type.name,
+                        'related_entity_id': notification.related_entity_id,
+                        'related_entity_type': notification.related_entity_type,
                         'created_at': notification.created_at.isoformat()
                     }, room=f'user_{user.id}')
 
@@ -230,6 +258,7 @@ def manage_entries():
         - payment_status (str, optional): Payment status
         - supplier_id (int, optional): Supplier ID
         - due_date (datetime, optional): Due date
+        - category_id (int, optional): Category ID
     """
     try:
         identity = get_jwt_identity()
@@ -307,6 +336,11 @@ def manage_entries():
             }), 200
 
         if request.method == 'POST':
+            if current_user.role != UserRole.CLERK:
+                logger.warning("Unauthorized inventory entry creation attempt by user ID: %s, role: %s",
+                               current_user.id, current_user.role.name)
+                return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+
             data = request.get_json()
             if not data:
                 logger.error("No request body provided for inventory entry creation by user ID: %s", current_user.id)
@@ -336,6 +370,13 @@ def manage_entries():
                     logger.error("Supplier not found: %s for user ID: %s", supplier_id, current_user.id)
                     return jsonify({'status': 'error', 'message': 'Supplier not found'}), 404
 
+            category_id = data.get('category_id')
+            if category_id:
+                category = db.session.get(ProductCategory, category_id)
+                if not category:
+                    logger.error("Category not found: %s for user ID: %s", category_id, current_user.id)
+                    return jsonify({'status': 'error', 'message': 'Category not found'}), 404
+
             quantity_spoiled = data.get('quantity_spoiled', 0)
             if quantity_spoiled > data['quantity_received']:
                 logger.error("Quantity spoiled %s exceeds quantity received %s for user ID: %s",
@@ -346,6 +387,7 @@ def manage_entries():
                 entry = InventoryEntry(
                     product_id=data['product_id'],
                     store_id=product.store_id,
+                    category_id=category_id,
                     quantity_received=data['quantity_received'],
                     quantity_spoiled=quantity_spoiled,
                     buying_price=data['buying_price'],
@@ -360,43 +402,79 @@ def manage_entries():
                 product.current_stock += (entry.quantity_received - entry.quantity_spoiled)
                 db.session.flush()
 
+                # Notify about inventory entry
+                users_to_notify = db.session.query(User).filter(
+                    user_store.c.user_id == User.id,
+                    user_store.c.store_id == product.store_id,
+                    User.role.in_([UserRole.ADMIN, UserRole.MERCHANT])
+                ).all()
+                for user in users_to_notify:
+                    notification = Notification(
+                        user_id=user.id,
+                        message=f"New inventory entry for '{product.name}' recorded by {current_user.name}",
+                        type=NotificationType.INVENTORY_ENTRY,
+                        related_entity_id=entry.id,
+                        related_entity_type='InventoryEntry'
+                    )
+                    db.session.add(notification)
+                    db.session.flush()
+                    socketio.emit('new_notification', {
+                        'id': notification.id,
+                        'message': notification.message,
+                        'type': notification.type.name,
+                        'related_entity_id': notification.related_entity_id,
+                        'related_entity_type': notification.related_entity_type,
+                        'created_at': notification.created_at.isoformat()
+                    }, room=f'user_{user.id}')
+
                 if quantity_spoiled > 0:
-                    users_to_notify = db.session.query(User).filter(
-                        user_store.c.user_id == User.id,
-                        user_store.c.store_id == product.store_id,
-                        User.role.in_([UserRole.ADMIN, UserRole.MERCHANT])
-                    ).all()
                     for user in users_to_notify:
                         notification = Notification(
                             user_id=user.id,
-                            message=f"Inventory entry for '{product.name}' recorded with {quantity_spoiled} spoiled units (affects stock only; spoilage value derived from sales)."
+                            message=f"Inventory entry for '{product.name}' recorded with {quantity_spoiled} spoiled units (affects stock only; spoilage value derived from sales).",
+                            type=NotificationType.SPOILAGE,
+                            related_entity_id=entry.id,
+                            related_entity_type='InventoryEntry'
                         )
                         db.session.add(notification)
                         db.session.flush()
                         socketio.emit('new_notification', {
                             'id': notification.id,
                             'message': notification.message,
+                            'type': notification.type.name,
+                            'related_entity_id': notification.related_entity_id,
+                            'related_entity_type': notification.related_entity_type,
                             'created_at': notification.created_at.isoformat()
                         }, room=f'user_{user.id}')
 
                 if product.current_stock <= product.min_stock_level:
-                    users_to_notify = db.session.query(User).filter(
-                        user_store.c.user_id == User.id,
-                        user_store.c.store_id == product.store_id,
-                        User.role.in_([UserRole.ADMIN, UserRole.MERCHANT])
-                    ).all()
                     for user in users_to_notify:
                         notification = Notification(
                             user_id=user.id,
-                            message=f"Product '{product.name}' stock is low: {product.current_stock} units."
+                            message=f"Product '{product.name}' stock is low: {product.current_stock} units.",
+                            type=NotificationType.LOW_STOCK,
+                            related_entity_id=product.id,
+                            related_entity_type='Product'
                         )
                         db.session.add(notification)
                         db.session.flush()
                         socketio.emit('new_notification', {
                             'id': notification.id,
                             'message': notification.message,
+                            'type': notification.type.name,
+                            'related_entity_id': notification.related_entity_id,
+                            'related_entity_type': notification.related_entity_type,
                             'created_at': notification.created_at.isoformat()
                         }, room=f'user_{user.id}')
+
+                # Log activity
+                activity = ActivityLog(
+                    user_id=current_user.id,
+                    action_type='STOCK_ENTRY',
+                    details=f'Added {data["quantity_received"]} units of product ID {data["product_id"]}',
+                    status='success'
+                )
+                db.session.add(activity)
 
             db.session.commit()
             logger.info("Inventory entry created for product: %s (ID: %s) by user ID: %s, role: %s, quantity_spoiled: %d",
@@ -404,7 +482,7 @@ def manage_entries():
             return jsonify({
                 'status': 'success',
                 'message': 'Inventory entry created successfully',
-                'inventory_entry': InventoryEntrySchema().dump(entry)
+                'entry': InventoryEntrySchema().dump(entry)
             }), 201
 
     except Exception as e:
@@ -427,6 +505,7 @@ def modify_entry(entry_id):
         - payment_status (str, optional): Updated payment status
         - supplier_id (int, optional): Updated supplier ID
         - due_date (datetime, optional): Updated due date
+        - category_id (int, optional): Updated category ID
     """
     try:
         identity = get_jwt_identity()
@@ -502,48 +581,93 @@ def modify_entry(entry_id):
                     entry.supplier_id = supplier_id
                 if 'due_date' in data:
                     entry.due_date = data['due_date']
+                if 'category_id' in data:
+                    category_id = data['category_id']
+                    if category_id:
+                        category = db.session.get(ProductCategory, category_id)
+                        if not category:
+                            logger.error("Category not found: %s for entry: %s by user ID: %s",
+                                         category_id, entry_id, current_user.id)
+                            return jsonify({'status': 'error', 'message': 'Category not found'}), 404
+                    entry.category_id = category_id
 
                 new_net_quantity = entry.quantity_received - entry.quantity_spoiled
                 product.current_stock += new_net_quantity
                 db.session.flush()
 
+                # Notify about stock update
+                users_to_notify = db.session.query(User).filter(
+                    user_store.c.user_id == User.id,
+                    user_store.c.store_id == product.store_id,
+                    User.role.in_([UserRole.ADMIN, UserRole.MERCHANT])
+                ).all()
+                for user in users_to_notify:
+                    notification = Notification(
+                        user_id=user.id,
+                        message=f"Inventory entry for '{product.name}' updated with {entry.quantity_received} units.",
+                        type=NotificationType.STOCK_UPDATED,
+                        related_entity_id=entry.id,
+                        related_entity_type='InventoryEntry'
+                    )
+                    db.session.add(notification)
+                    db.session.flush()
+                    socketio.emit('new_notification', {
+                        'id': notification.id,
+                        'message': notification.message,
+                        'type': notification.type.name,
+                        'related_entity_id': notification.related_entity_id,
+                        'related_entity_type': notification.related_entity_type,
+                        'created_at': notification.created_at.isoformat()
+                    }, room=f'user_{user.id}')
+
                 if quantity_spoiled > 0:
-                    users_to_notify = db.session.query(User).filter(
-                        user_store.c.user_id == User.id,
-                        user_store.c.store_id == product.store_id,
-                        User.role.in_([UserRole.ADMIN, UserRole.MERCHANT])
-                    ).all()
                     for user in users_to_notify:
                         notification = Notification(
                             user_id=user.id,
-                            message=f"Inventory entry for '{product.name}' updated with {quantity_spoiled} spoiled units (affects stock only; spoilage value derived from sales)."
+                            message=f"Inventory entry for '{product.name}' updated with {quantity_spoiled} spoiled units (affects stock only; spoilage value derived from sales).",
+                            type=NotificationType.SPOILAGE,
+                            related_entity_id=entry.id,
+                            related_entity_type='InventoryEntry'
                         )
                         db.session.add(notification)
                         db.session.flush()
                         socketio.emit('new_notification', {
                             'id': notification.id,
                             'message': notification.message,
+                            'type': notification.type.name,
+                            'related_entity_id': notification.related_entity_id,
+                            'related_entity_type': notification.related_entity_type,
                             'created_at': notification.created_at.isoformat()
                         }, room=f'user_{user.id}')
 
                 if product.current_stock <= product.min_stock_level:
-                    users_to_notify = db.session.query(User).filter(
-                        user_store.c.user_id == User.id,
-                        user_store.c.store_id == product.store_id,
-                        User.role.in_([UserRole.ADMIN, UserRole.MERCHANT])
-                    ).all()
                     for user in users_to_notify:
                         notification = Notification(
                             user_id=user.id,
-                            message=f"Product '{product.name}' stock updated to low level: {product.current_stock} units."
+                            message=f"Product '{product.name}' stock updated to low level: {product.current_stock} units.",
+                            type=NotificationType.LOW_STOCK,
+                            related_entity_id=product.id,
+                            related_entity_type='Product'
                         )
                         db.session.add(notification)
                         db.session.flush()
                         socketio.emit('new_notification', {
                             'id': notification.id,
                             'message': notification.message,
+                            'type': notification.type.name,
+                            'related_entity_id': notification.related_entity_id,
+                            'related_entity_type': notification.related_entity_type,
                             'created_at': notification.created_at.isoformat()
                         }, room=f'user_{user.id}')
+
+                # Log activity
+                activity = ActivityLog(
+                    user_id=current_user.id,
+                    action_type='UPDATE_STOCK_ENTRY',
+                    details=f'Updated entry {entry_id} for product ID {entry.product_id}',
+                    status='success'
+                )
+                db.session.add(activity)
 
             db.session.commit()
             logger.info("Inventory entry updated: %s by user ID: %s, role: %s, quantity_spoiled: %d",
@@ -570,15 +694,30 @@ def modify_entry(entry_id):
                     for user in users_to_notify:
                         notification = Notification(
                             user_id=user.id,
-                            message=f"Product '{product.name}' stock updated to low level: {product.current_stock} units after entry deletion."
+                            message=f"Product '{product.name}' stock updated to low level: {product.current_stock} units after entry deletion.",
+                            type=NotificationType.LOW_STOCK,
+                            related_entity_id=product.id,
+                            related_entity_type='Product'
                         )
                         db.session.add(notification)
                         db.session.flush()
                         socketio.emit('new_notification', {
                             'id': notification.id,
                             'message': notification.message,
+                            'type': notification.type.name,
+                            'related_entity_id': notification.related_entity_id,
+                            'related_entity_type': notification.related_entity_type,
                             'created_at': notification.created_at.isoformat()
                         }, room=f'user_{user.id}')
+
+                # Log activity
+                activity = ActivityLog(
+                    user_id=current_user.id,
+                    action_type='DELETE_STOCK_ENTRY',
+                    details=f'Deleted entry {entry_id} for product ID {entry.product_id}',
+                    status='success'
+                )
+                db.session.add(activity)
 
             db.session.commit()
             logger.info("Inventory entry deleted: %s by user ID: %s, role: %s", entry_id, current_user.id, current_user.role.name)
@@ -597,7 +736,7 @@ def modify_entry(entry_id):
 def manage_supply_requests():
     """
     GET: Get supply requests with filters and pagination.
-    POST: Create a new supply request.
+    POST: Create a new supply request and emit WebSocket event.
     Query Parameters (GET):
         - product_id (int, optional): Filter by product ID
         - status (str, optional): Filter by request status
@@ -638,8 +777,6 @@ def manage_supply_requests():
 
             query = db.session.query(SupplyRequest).\
                 join(Product, SupplyRequest.product_id == Product.id).\
-                join(User, SupplyRequest.clerk_id == User.id).\
-                join(Store, Product.store_id == Store.id).\
                 filter(Product.store_id.in_(store_ids))
 
             if product_id:
@@ -661,15 +798,16 @@ def manage_supply_requests():
 
             for req, serialized in zip(requests, result):
                 product = db.session.get(Product, req.product_id)
-                user = db.session.get(User, req.clerk_id)
-                store = db.session.get(Store, product.store_id)
+                clerk = db.session.get(User, req.clerk_id)
                 admin = db.session.get(User, req.admin_id) if req.admin_id else None
+                store = db.session.get(Store, req.store_id) if req.store_id else None
                 serialized['product_name'] = product.name if product else None
                 serialized['clerk_id'] = req.clerk_id
-                serialized['clerk_name'] = user.name if user else None
+                serialized['clerk_name'] = clerk.name if clerk else None
                 serialized['admin_name'] = admin.name if admin else None
                 serialized['store_id'] = store.id if store else None
                 serialized['store_name'] = store.name if store else None
+                serialized['current_stock'] = product.current_stock if product else 0
 
             logger.info("Fetched %d supply requests for user ID: %s, role: %s, page: %d, store_ids: %s",
                         paginated.total, current_user.id, current_user.role.name, page, store_ids)
@@ -682,6 +820,11 @@ def manage_supply_requests():
             }), 200
 
         if request.method == 'POST':
+            if current_user.role != UserRole.CLERK:
+                logger.warning("Unauthorized supply request creation attempt by user ID: %s, role: %s",
+                               current_user.id, current_user.role.name)
+                return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+
             data = request.get_json()
             if not data:
                 logger.error("No request body provided for supply request creation by user ID: %s", current_user.id)
@@ -704,41 +847,65 @@ def manage_supply_requests():
                                current_user.id, product.store_id)
                 return jsonify({'status': 'error', 'message': 'You can only request supplies for your store'}), 403
 
-            supply_request = SupplyRequest(
-                product_id=data['product_id'],
-                quantity_requested=data['quantity_requested'],
-                clerk_id=current_user.id,
-                status=RequestStatus.PENDING
-            )
+            quantity_requested = data.get('quantity_requested', product.min_stock_level * 2)
 
-            db.session.add(supply_request)
-            db.session.flush()
-
-            admins = db.session.query(User).filter(
-                user_store.c.user_id == User.id,
-                user_store.c.store_id == product.store_id,
-                User.role == UserRole.ADMIN
-            ).all()
-            for admin in admins:
-                notification = Notification(
-                    user_id=admin.id,
-                    message=f"New supply request for {product.name} by clerk {current_user.name}"
+            with db.session.begin_nested():
+                supply_request = SupplyRequest(
+                    product_id=product.id,
+                    quantity_requested=quantity_requested,
+                    clerk_id=current_user.id,
+                    store_id=product.store_id,
+                    status=RequestStatus.PENDING
                 )
-                db.session.add(notification)
+
+                db.session.add(supply_request)
                 db.session.flush()
-                socketio.emit('new_notification', {
-                    'id': notification.id,
-                    'message': notification.message,
-                    'created_at': notification.created_at.isoformat()
-                }, room=f'user_{admin.id}')
+
+                admins = db.session.query(User).filter(
+                    user_store.c.user_id == User.id,
+                    user_store.c.store_id == product.store_id,
+                    User.role == UserRole.ADMIN
+                ).all()
+                for admin in admins:
+                    notification = Notification(
+                        user_id=admin.id,
+                        message=f"New supply request for {product.name} from {current_user.name}.",
+                        type=NotificationType.SUPPLY_REQUEST,
+                        related_entity_id=supply_request.id,
+                        related_entity_type='SupplyRequest'
+                    )
+                    db.session.add(notification)
+                    db.session.flush()
+                    socketio.emit('supply_request', {
+                        'request_id': supply_request.id,
+                        'product_id': product.id,
+                        'product_name': product.name,
+                        'quantity': quantity_requested,
+                        'clerk_id': current_user.id,
+                        'clerk_name': current_user.name,
+                        'store_id': product.store_id,
+                        'current_stock': product.current_stock,
+                        'message': f"New supply request for {product.name}: {quantity_requested} units",
+                        'type': 'SUPPLY_REQUEST',
+                        'timestamp': datetime.utcnow().isoformat()
+                    }, room=f'user_{admin.id}')
+
+                # Log activity
+                activity = ActivityLog(
+                    user_id=current_user.id,
+                    action_type='SUPPLY_REQUEST_CREATE',
+                    details=f'Requested {quantity_requested} units of {product.name}',
+                    status='success'
+                )
+                db.session.add(activity)
 
             db.session.commit()
             logger.info("Supply request created for product: %s (ID: %s) by user ID: %s, role: %s",
                         product.name, supply_request.id, current_user.id, current_user.role.name)
             return jsonify({
                 'status': 'success',
-                'message': 'Supply request created successfully',
-                'supply_request': SupplyRequestSchema().dump(supply_request)
+                'message': 'Supply request submitted successfully',
+                'request': SupplyRequestSchema().dump(supply_request)
             }), 201
 
     except Exception as e:
@@ -746,156 +913,183 @@ def manage_supply_requests():
         logger.error("Error in manage_supply_requests for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
-@inventory_bp.route('/supply-requests/<int:request_id>', methods=['PUT'])
-@jwt_required()
-def update_supply_request(request_id):
-    """
-    Update a supply request (approve/decline).
-    Request Body:
-        - status (str): New status (APPROVED or DECLINED)
-        - decline_reason (str, optional): Reason for declining
-    """
-    try:
-        identity = get_jwt_identity()
-        current_user = db.session.get(User, identity['id'])
-        if not current_user or current_user.role == UserRole.CLERK:
-            logger.warning("Unauthorized supply request update attempt by user ID: %s, role: %s",
-                           identity.get('id', 'unknown'), current_user.role.name if current_user else 'none')
-            return jsonify({'status': 'error', 'message': 'Unauthorized to update supply requests'}), 403
-
-        req = db.session.get(SupplyRequest, request_id)
-        if not req:
-            logger.error("Supply request not found: %s for user ID: %s", request_id, current_user.id)
-            return jsonify({'status': 'error', 'message': 'Supply request not found'}), 404
-
-        product = db.session.get(Product, req.product_id)
-        if not product:
-            logger.error("Product not found for supply request: %s for user ID: %s", request_id, current_user.id)
-            return jsonify({'status': 'error', 'message': 'Product not found'}), 404
-
-        store_ids = get_store_ids(current_user.id, current_user.role, product.store_id)
-        if product.store_id not in store_ids:
-            logger.warning("User ID: %s attempted to update supply request for unauthorized store: %s",
-                           current_user.id, product.store_id)
-            return jsonify({'status': 'error', 'message': 'You can only update requests for your store'}), 403
-
-        data = request.get_json()
-        if not data or not data.get('status'):
-            logger.error("Status missing in update supply request: %s by user ID: %s", request_id, current_user.id)
-            return jsonify({'status': 'error', 'message': 'Status is required'}), 400
-
-        try:
-            new_status = RequestStatus[data['status'].upper()]
-        except KeyError:
-            logger.error("Invalid status: %s for supply request: %s by user ID: %s",
-                         data.get('status'), request_id, current_user.id)
-            return jsonify({'status': 'error', 'message': 'Invalid status'}), 400
-
-        if req.status != RequestStatus.PENDING:
-            logger.error("Attempt to update non-pending supply request: %s, current status: %s by user ID: %s",
-                         request_id, req.status.name, current_user.id)
-            return jsonify({'status': 'error', 'message': 'Only pending requests can be updated'}), 400
-
-        with db.session.begin_nested():
-            req.status = new_status
-            req.admin_id = current_user.id
-            if new_status == RequestStatus.DECLINED and data.get('decline_reason'):
-                req.decline_reason = data['decline_reason']
-
-            clerk = db.session.get(User, req.clerk_id)
-            message = f"Your supply request for {product.name} has been {new_status.name.lower()}"
-            if new_status == RequestStatus.DECLINED and req.decline_reason:
-                message += f". Reason: {req.decline_reason}"
-            notification = Notification(
-                user_id=clerk.id,
-                message=message
-            )
-            db.session.add(notification)
-            db.session.flush()
-            socketio.emit('new_notification', {
-                'id': notification.id,
-                'message': notification.message,
-                'created_at': notification.created_at.isoformat()
-            }, room=f'user_{clerk.id}')
-
-        db.session.commit()
-        logger.info("Supply request %s updated to %s by user ID: %s, role: %s",
-                    request_id, new_status.name, current_user.id, current_user.role.name)
-        return jsonify({
-            'status': 'success',
-            'message': f'Supply request {new_status.name.lower()} successfully',
-            'supply_request': SupplyRequestSchema().dump(req)
-        }), 200
-
-    except Exception as e:
-        db.session.rollback()
-        logger.error("Error in update_supply_request for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
-        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
-
 @inventory_bp.route('/supply-requests/<int:request_id>/approve', methods=['PUT'])
 @jwt_required()
 def approve_supply_request(request_id):
     """
-    Approve a supply request.
+    Approve a supply request (admin only).
     """
     try:
         identity = get_jwt_identity()
         current_user = db.session.get(User, identity['id'])
-        if not current_user or current_user.role == UserRole.CLERK:
+        if not current_user or current_user.role != UserRole.ADMIN:
             logger.warning("Unauthorized supply request approval attempt by user ID: %s, role: %s",
                            identity.get('id', 'unknown'), current_user.role.name if current_user else 'none')
-            return jsonify({'status': 'error', 'message': 'Unauthorized to approve supply requests'}), 403
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
 
-        req = db.session.get(SupplyRequest, request_id)
-        if not req:
+        request_obj = db.session.get(SupplyRequest, request_id)
+        if not request_obj:
             logger.error("Supply request not found: %s for user ID: %s", request_id, current_user.id)
-            return jsonify({'status': 'error', 'message': 'Supply request not found'}), 404
+            return jsonify({'status': 'error', 'message': 'Request not found'}), 404
 
-        product = db.session.get(Product, req.product_id)
+        product = db.session.get(Product, request_obj.product_id)
         if not product:
             logger.error("Product not found for supply request: %s for user ID: %s", request_id, current_user.id)
             return jsonify({'status': 'error', 'message': 'Product not found'}), 404
 
-        store_ids = get_store_ids(current_user.id, current_user.role, product.store_id)
-        if product.store_id not in store_ids:
+        store_ids = get_store_ids(current_user.id, current_user.role, request_obj.store_id)
+        if request_obj.store_id not in store_ids:
             logger.warning("User ID: %s attempted to approve supply request for unauthorized store: %s",
-                           current_user.id, product.store_id)
-            return jsonify({'status': 'error', 'message': 'You can only approve requests for your store'}), 403
+                           current_user.id, request_obj.store_id)
+            return jsonify({'status': 'error', 'message': 'Unauthorized store access'}), 403
 
-        if req.status != RequestStatus.PENDING:
+        if request_obj.status != RequestStatus.PENDING:
             logger.error("Attempt to approve non-pending supply request: %s, current status: %s by user ID: %s",
-                         request_id, req.status.name, current_user.id)
-            return jsonify({'status': 'error', 'message': 'Only pending requests can be approved'}), 400
+                         request_id, request_obj.status.name, current_user.id)
+            return jsonify({'status': 'error', 'message': 'Request already processed'}), 400
 
         with db.session.begin_nested():
-            req.status = RequestStatus.APPROVED
-            req.admin_id = current_user.id
-
-            clerk = db.session.get(User, req.clerk_id)
+            request_obj.status = RequestStatus.APPROVED
+            request_obj.admin_id = current_user.id
+            request_obj.approval_date = datetime.utcnow()
+            
+            clerk = db.session.get(User, request_obj.clerk_id)
+            
+            # Notify the clerk
             notification = Notification(
                 user_id=clerk.id,
-                message=f"Your supply request for {product.name} has been approved"
+                message=f"Your supply request for {product.name} has been approved",
+                type=NotificationType.SUPPLY_REQUEST,
+                related_entity_id=request_obj.id,
+                related_entity_type='SupplyRequest'
             )
             db.session.add(notification)
             db.session.flush()
-            socketio.emit('new_notification', {
-                'id': notification.id,
-                'message': notification.message,
-                'created_at': notification.created_at.isoformat()
+            
+            # Send real-time update to clerk
+            socketio.emit('supply_request_status', {
+                'request_id': request_obj.id,
+                'status': 'approved',
+                'product_name': product.name,
+                'admin_name': current_user.name,
+                'timestamp': datetime.utcnow().isoformat()
             }, room=f'user_{clerk.id}')
+
+            # Log activity
+            activity = ActivityLog(
+                user_id=current_user.id,
+                action_type='SUPPLY_REQUEST_APPROVE',
+                details=f'Approved request for {product.name}',
+                status='success'
+            )
+            db.session.add(activity)
 
         db.session.commit()
         logger.info("Supply request %s approved by user ID: %s, role: %s",
                     request_id, current_user.id, current_user.role.name)
         return jsonify({
             'status': 'success',
-            'message': 'Supply request approved successfully',
-            'supply_request': SupplyRequestSchema().dump(req)
+            'message': 'Request approved',
+            'request': SupplyRequestSchema().dump(request_obj)
         }), 200
 
     except Exception as e:
         db.session.rollback()
         logger.error("Error in approve_supply_request for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
+        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+
+@inventory_bp.route('/supply-requests/<int:request_id>/decline', methods=['PUT'])
+@jwt_required()
+def decline_supply_request(request_id):
+    """
+    Decline a supply request (admin only).
+    Request Body:
+        - decline_reason (str): Reason for declining
+    """
+    try:
+        identity = get_jwt_identity()
+        current_user = db.session.get(User, identity['id'])
+        if not current_user or current_user.role != UserRole.ADMIN:
+            logger.warning("Unauthorized supply request decline attempt by user ID: %s, role: %s",
+                           identity.get('id', 'unknown'), current_user.role.name if current_user else 'none')
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+
+        request_obj = db.session.get(SupplyRequest, request_id)
+        if not request_obj:
+            logger.error("Supply request not found: %s for user ID: %s", request_id, current_user.id)
+            return jsonify({'status': 'error', 'message': 'Request not found'}), 404
+
+        product = db.session.get(Product, request_obj.product_id)
+        if not product:
+            logger.error("Product not found for supply request: %s for user ID: %s", request_id, current_user.id)
+            return jsonify({'status': 'error', 'message': 'Product not found'}), 404
+
+        store_ids = get_store_ids(current_user.id, current_user.role, request_obj.store_id)
+        if request_obj.store_id not in store_ids:
+            logger.warning("User ID: %s attempted to decline supply request for unauthorized store: %s",
+                           current_user.id, request_obj.store_id)
+            return jsonify({'status': 'error', 'message': 'Unauthorized store access'}), 403
+
+        data = request.get_json()
+        if not data or not data.get('decline_reason'):
+            logger.error("Decline reason missing for supply request: %s by user ID: %s", request_id, current_user.id)
+            return jsonify({'status': 'error', 'message': 'Decline reason required'}), 400
+
+        if request_obj.status != RequestStatus.PENDING:
+            logger.error("Attempt to decline non-pending supply request: %s, current status: %s by user ID: %s",
+                         request_id, request_obj.status.name, current_user.id)
+            return jsonify({'status': 'error', 'message': 'Request already processed'}), 400
+
+        with db.session.begin_nested():
+            request_obj.status = RequestStatus.DECLINED
+            request_obj.admin_id = current_user.id
+            request_obj.decline_reason = data['decline_reason']
+            request_obj.updated_at = datetime.utcnow()
+            
+            clerk = db.session.get(User, request_obj.clerk_id)
+            
+            # Notify the clerk
+            notification = Notification(
+                user_id=clerk.id,
+                message=f"Your supply request for {product.name} was declined. Reason: {data['decline_reason']}",
+                type=NotificationType.SUPPLY_REQUEST,
+                related_entity_id=request_obj.id,
+                related_entity_type='SupplyRequest'
+            )
+            db.session.add(notification)
+            db.session.flush()
+            
+            # Send real-time update to clerk
+            socketio.emit('supply_request_status', {
+                'request_id': request_obj.id,
+                'status': 'declined',
+                'product_name': product.name,
+                'admin_name': current_user.name,
+                'decline_reason': data['decline_reason'],
+                'timestamp': datetime.utcnow().isoformat()
+            }, room=f'user_{clerk.id}')
+
+            # Log activity
+            activity = ActivityLog(
+                user_id=current_user.id,
+                action_type='SUPPLY_REQUEST_DECLINE',
+                details=f'Declined request for {product.name} with reason: {data["decline_reason"]}',
+                status='success'
+            )
+            db.session.add(activity)
+
+        db.session.commit()
+        logger.info("Supply request %s declined by user ID: %s, role: %s",
+                    request_id, current_user.id, current_user.role.name)
+        return jsonify({
+            'status': 'success',
+            'message': 'Request declined',
+            'request': SupplyRequestSchema().dump(request_obj)
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error("Error in decline_supply_request for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
 @inventory_bp.route('/update-payment', methods=['PUT'])
@@ -952,15 +1146,30 @@ def update_payment():
                 for user in users_to_notify:
                     notification = Notification(
                         user_id=user.id,
-                        message=f"Payment status for inventory entry of product '{product.name}' updated to PAID."
+                        message=f"Payment status for inventory entry of product '{product.name}' updated to PAID.",
+                        type=NotificationType.PAYMENT,
+                        related_entity_id=entry.id,
+                        related_entity_type='InventoryEntry'
                     )
                     db.session.add(notification)
                     db.session.flush()
                     socketio.emit('new_notification', {
                         'id': notification.id,
                         'message': notification.message,
+                        'type': notification.type.name,
+                        'related_entity_id': notification.related_entity_id,
+                        'related_entity_type': notification.related_entity_type,
                         'created_at': notification.created_at.isoformat()
                     }, room=f'user_{user.id}')
+
+                # Log activity
+                activity = ActivityLog(
+                    user_id=current_user.id,
+                    action_type='PAYMENT_UPDATE',
+                    details=f'Updated payment status to PAID for entry {entry_id}',
+                    status='success'
+                )
+                db.session.add(activity)
 
         db.session.commit()
         logger.info("Payment updated for %d inventory entries by user ID: %s, role: %s",
@@ -980,7 +1189,7 @@ def update_payment():
 @jwt_required()
 def low_stock():
     """
-    Get products with low stock levels.
+    Get products with low stock levels for clerk alerts.
     Query Parameters:
         - store_id (int, optional): Filter by store ID
     """
@@ -997,34 +1206,29 @@ def low_stock():
             logger.warning(f"No accessible stores for user ID: {current_user.id}")
             return jsonify({
                 'status': 'success',
-                'message': 'No accessible stores for this user',
-                'items': [],
+                'alerts': [],
                 'count': 0
             }), 200
 
-        query = db.session.query(Product).filter(
+        products = db.session.query(Product).filter(
             Product.current_stock <= Product.min_stock_level,
             Product.store_id.in_(store_ids)
-        )
+        ).all()
 
-        products = query.all()
-        result = ProductSchema(many=True).dump(products)
-        for product, serialized in zip(products, result):
-            store = db.session.get(Store, product.store_id)
-            category = db.session.get(ProductCategory, product.category_id) if product.category_id else None
-            serialized['id'] = product.id
-            serialized['name'] = product.name
-            serialized['store_id'] = product.store_id
-            serialized['store_name'] = store.name if store else None
-            serialized['category_name'] = category.name if category else None
-            serialized['low_stock'] = True
+        alerts = [{
+            'product_id': p.id,
+            'product_name': p.name,
+            'current_stock': p.current_stock,
+            'min_stock_level': p.min_stock_level,
+            'store_id': p.store_id
+        } for p in products]
 
         logger.info("Fetched %d low stock products for user ID: %s, role: %s, store_ids: %s",
-                    len(result), current_user.id, current_user.role.name, store_ids)
+                    len(alerts), current_user.id, current_user.role.name, store_ids)
         return jsonify({
             'status': 'success',
-            'items': result,
-            'count': len(result)
+            'alerts': alerts,
+            'count': len(alerts)
         }), 200
 
     except Exception as e:
@@ -1294,4 +1498,33 @@ def search_products():
 
     except Exception as e:
         logger.error("Error in search_products for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
+        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+
+@inventory_bp.route('/activity-logs', methods=['GET'])
+@jwt_required()
+def get_activity_logs():
+    """
+    Get activity logs for the current user.
+    """
+    try:
+        identity = get_jwt_identity()
+        current_user = db.session.get(User, identity['id'])
+        if not current_user:
+            logger.error("User not found for identity: %s", identity)
+            return jsonify({'status': 'error', 'message': 'User not found'}), 404
+
+        logs = ActivityLog.query.filter_by(user_id=current_user.id).order_by(ActivityLog.created_at.desc()).all()
+        result = [{
+            'id': log.id,
+            'action_type': log.action_type,
+            'details': log.details,
+            'status': log.status,
+            'created_at': log.created_at.isoformat()
+        } for log in logs]
+
+        logger.info("Fetched %d activity logs for user ID: %s", len(result), current_user.id)
+        return jsonify({'status': 'success', 'logs': result}), 200
+
+    except Exception as e:
+        logger.error("Error in get_activity_logs for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500

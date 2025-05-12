@@ -36,7 +36,10 @@ const useSocket = () => {
         origin: corsOrigins.split(','),
         credentials: true,
       },
-      reconnection: false, // Handle reconnection manually
+      reconnection: true,
+      reconnectionAttempts: maxRetries,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
     });
 
     socketInstance.on('connect', () => {
@@ -56,13 +59,13 @@ const useSocket = () => {
           const newToken = await refreshToken();
           if (newToken) {
             setRetryCount((prev) => prev + 1);
-            socketInstance.close();
-            connectSocket(newToken);
+            socketInstance.io.opts.query = { token: `Bearer ${newToken}` };
+            socketInstance.connect();
           }
         }, delay);
       } else {
         console.error('Max WebSocket retry attempts reached');
-        socketInstance.close();
+        socketInstance.disconnect();
         setSocket(null);
       }
     });
@@ -77,8 +80,8 @@ const useSocket = () => {
           const newToken = await refreshToken();
           if (newToken) {
             setRetryCount((prev) => prev + 1);
-            socketInstance.close();
-            connectSocket(newToken);
+            socketInstance.io.opts.query = { token: `Bearer ${newToken}` };
+            socketInstance.connect();
           }
         }, delay);
       }
@@ -99,6 +102,16 @@ const useSocket = () => {
           console.log('User invited event received:', args);
         }
       }
+      if (event === 'supply_request') {
+        if (!import.meta.env.PROD) {
+          console.log('Supply request event received:', args);
+        }
+      }
+      if (event === 'supply_request_status') {
+        if (!import.meta.env.PROD) {
+          console.log('Supply request status update received:', args);
+        }
+      }
     });
 
     setSocket(socketInstance);
@@ -115,8 +128,8 @@ const useSocket = () => {
     initializeSocket();
 
     return () => {
-      if (socketInstance && typeof socketInstance.close === 'function') {
-        socketInstance.close();
+      if (socketInstance && typeof socketInstance.disconnect === 'function') {
+        socketInstance.disconnect();
         if (!import.meta.env.PROD) {
           console.log('WebSocket closed on cleanup');
         }

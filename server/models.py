@@ -28,7 +28,7 @@ class PaymentStatus(enum.Enum):
 
 class RequestStatus(enum.Enum):
     PENDING = 'PENDING'
-    APPROVED = 'DECLINED'
+    APPROVED = 'APPROVED'
     DECLINED = 'DECLINED'
 
 class InvitationStatus(enum.Enum):
@@ -45,6 +45,9 @@ class NotificationType(enum.Enum):
     ACCOUNT_STATUS = 'ACCOUNT_STATUS'
     ACCOUNT_DELETION = 'ACCOUNT_DELETION'
     USER_INVITED = 'USER_INVITED'
+    INVENTORY_ENTRY = 'INVENTORY_ENTRY'  # Added for stock entry notifications
+    PRODUCT_ADDED = 'PRODUCT_ADDED'      # Added for new product notifications
+    STOCK_UPDATED = 'STOCK_UPDATED'      # Added for stock update notifications (e.g., after modify_entry)
 
 class User(db.Model):
     """User model for all system users (merchants, admins, clerks)"""
@@ -56,22 +59,23 @@ class User(db.Model):
     name = db.Column(db.String(100), nullable=False)
     role = db.Column(db.Enum(UserRole), nullable=False)
     status = db.Column(db.Enum(UserStatus), default=UserStatus.ACTIVE, nullable=False)
-    manager_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    manager_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     stores = db.relationship('Store', secondary=user_store, back_populates='users')
     manager = db.relationship('User', remote_side=[id], back_populates='clerks')
-    clerks = db.relationship('User', back_populates='manager')
+    clerks = db.relationship('User', back_populates='manager', foreign_keys=[manager_id])
     invitations = db.relationship('Invitation', back_populates='creator')
-    inventory_entries = db.relationship('InventoryEntry', back_populates='clerk')
+    inventory_entries = db.relationship('InventoryEntry', back_populates='clerk', foreign_keys='InventoryEntry.recorded_by')
     supply_requests = db.relationship('SupplyRequest', back_populates='clerk', foreign_keys='SupplyRequest.clerk_id')
     approved_requests = db.relationship('SupplyRequest', back_populates='admin', foreign_keys='SupplyRequest.admin_id')
     password_resets = db.relationship('PasswordReset', back_populates='user')
     notifications = db.relationship('Notification', back_populates='user')
     sales_records = db.relationship('SalesRecord', back_populates='recorded_by')
     payment_audits = db.relationship('PaymentAudit', back_populates='user')
+    activity_logs = db.relationship('ActivityLog', back_populates='user', foreign_keys='ActivityLog.user_id')
 
     __table_args__ = (
         db.Index('idx_user_email', 'email'),
@@ -89,6 +93,20 @@ class User(db.Model):
 
     def check_password(self, password):
         return check_password_hash(self._password, password)
+
+    def deactivate(self):
+        self.status = UserStatus.INACTIVE
+        self.updated_at = datetime.utcnow()
+
+    def activate(self):
+        self.status = UserStatus.ACTIVE
+        self.updated_at = datetime.utcnow()
+
+    def soft_delete(self):
+        self.email = None
+        self._password = None
+        self.status = UserStatus.INACTIVE
+        self.updated_at = datetime.utcnow()
 
 class Store(db.Model):
     """Store model for business locations"""
@@ -191,7 +209,7 @@ class InventoryEntry(db.Model):
     payment_status = db.Column(db.Enum(PaymentStatus), default=PaymentStatus.UNPAID, nullable=False)
     payment_date = db.Column(db.DateTime, nullable=True)
     supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=True)
-    recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    recorded_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=False)
     entry_date = db.Column(db.DateTime, default=datetime.utcnow)
     due_date = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -231,7 +249,7 @@ class SalesRecord(db.Model):
     quantity_sold = db.Column(db.Integer, nullable=False)
     selling_price = db.Column(db.Float, nullable=False)
     sale_date = db.Column(db.DateTime, default=datetime.utcnow)
-    recorded_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    recorded_by_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -259,8 +277,8 @@ class SupplyRequest(db.Model):
     product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
     store_id = db.Column(db.Integer, db.ForeignKey('stores.id'), nullable=False)
     quantity_requested = db.Column(db.Integer, nullable=False)
-    clerk_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    admin_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    clerk_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=False)
+    admin_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     status = db.Column(db.Enum(RequestStatus), default=RequestStatus.PENDING, nullable=False)
     decline_reason = db.Column(db.Text, nullable=True)
     approval_date = db.Column(db.DateTime, nullable=True)
@@ -286,7 +304,7 @@ class Invitation(db.Model):
     email = db.Column(db.String(120), nullable=False)
     token = db.Column(db.String(255), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     role = db.Column(db.Enum(UserRole), nullable=False)
-    creator_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)  # Changed to nullable=True
+    creator_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     store_id = db.Column(db.Integer, db.ForeignKey('stores.id'), nullable=False)
     status = db.Column(db.Enum(InvitationStatus), default=InvitationStatus.PENDING, nullable=False)
     is_used = db.Column(db.Boolean, default=False, nullable=False)
@@ -314,7 +332,7 @@ class PasswordReset(db.Model):
     __tablename__ = 'password_resets'
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=False)
     token = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     is_used = db.Column(db.Boolean, default=False, nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False)
@@ -329,7 +347,7 @@ class Notification(db.Model):
     __tablename__ = 'notifications'
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # Already nullable
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     message = db.Column(db.String(500), nullable=False)
     type = db.Column(db.Enum(NotificationType), nullable=False)
     related_entity_id = db.Column(db.Integer, nullable=True)
@@ -352,8 +370,8 @@ class PaymentAudit(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     inventory_entry_id = db.Column(db.Integer, db.ForeignKey('inventory_entries.id'), nullable=False)
-    supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)  # Changed to nullable=True
+    supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id', ondelete='SET NULL'), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     old_status = db.Column(db.Enum(PaymentStatus), nullable=False)
     new_status = db.Column(db.Enum(PaymentStatus), nullable=False)
     change_date = db.Column(db.DateTime, default=datetime.utcnow)
@@ -390,4 +408,24 @@ class SalesGrowth(db.Model):
     __table_args__ = (
         db.Index('idx_sales_growth_store_month', 'store_id', 'month'),
         db.Index('idx_sales_growth_product', 'product_id'),
+    )
+
+class ActivityLog(db.Model):
+    """Activity log model for tracking user actions"""
+    __tablename__ = 'activity_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    action_type = db.Column(db.String(100), nullable=False)
+    details = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(50), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = db.relationship('User', back_populates='activity_logs')
+
+    __table_args__ = (
+        db.Index('idx_activity_log_user', 'user_id'),
+        db.Index('idx_activity_log_date', 'created_at'),
     )

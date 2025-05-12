@@ -17,12 +17,13 @@ export const AuthProvider = ({ children }) => {
       // Get updated user data
       const userResponse = await api.get('/api/auth/me');
       const updatedUser = {
+        id: userResponse.data.user.id, // Add user ID
         token: newToken,
-        role: userResponse.data.user.role.toUpperCase(), // Ensure uppercase
+        role: userResponse.data.user.role.toUpperCase(),
         name: userResponse.data.user.name,
         email: userResponse.data.user.email,
         store: userResponse.data.user.store || null,
-        status: userResponse.data.user.status // Add status check
+        status: userResponse.data.user.status
       };
 
       // Check if user is active
@@ -86,6 +87,7 @@ export const AuthProvider = ({ children }) => {
         const response = await api.get('/api/auth/me');
         const serverUser = response.data.user;
         const updatedUser = {
+          id: serverUser.id, // Add user ID
           token,
           role: serverUser.role.toUpperCase(),
           name: serverUser.name,
@@ -128,6 +130,7 @@ export const AuthProvider = ({ children }) => {
     // Normalize role and store user data
     const normalizedRole = userData.role.toUpperCase();
     const newUser = {
+      id: userData.id, // Add user ID
       token,
       role: normalizedRole,
       name: userData.name,

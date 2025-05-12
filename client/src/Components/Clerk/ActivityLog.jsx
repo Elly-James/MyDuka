@@ -1,4 +1,3 @@
-// src/Components/Clerk/ActivityLog.jsx
 import React, { useState, useEffect } from 'react';
 import { api, handleApiError } from '../utils/api';
 import SideBar from './SideBar';
@@ -14,8 +13,8 @@ const ActivityLog = () => {
     const fetchLogs = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/api/activity-logs');
-        setLogs(response.data.logs);
+        const response = await api.get('/api/inventory/activity-logs');
+        setLogs(response.data.logs || []);
       } catch (err) {
         handleApiError(err, setError);
       } finally {
@@ -36,40 +35,46 @@ const ActivityLog = () => {
       <SideBar />
       <div className="main-content">
         <NavBar />
-        
         {error && <div className="alert error">{error}</div>}
         {loading && <div className="loading">Loading activity logs...</div>}
-
         <h1>Activity Log</h1>
-        
         <div className="card">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Action</th>
-                <th>Details</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((log) => (
-                <tr key={log.id}>
-                  <td>{formatDate(log.created_at)}</td>
-                  <td>{log.action_type}</td>
-                  <td>{log.details}</td>
-                  <td>
-                    <span className={`badge ${
-                      log.status === 'success' ? 'success' : 
-                      log.status === 'pending' ? 'warning' : 'danger'
-                    }`}>
-                      {log.status}
-                    </span>
-                  </td>
+          {logs.length === 0 && !loading ? (
+            <p>No activity logs available.</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Action</th>
+                  <th>Details</th>
+                  <th>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {logs.map((log) => (
+                  <tr key={log.id}>
+                    <td>{formatDate(log.created_at)}</td>
+                    <td>{log.action_type}</td>
+                    <td>{log.details}</td>
+                    <td>
+                      <span
+                        className={`badge ${
+                          log.status === 'success'
+                            ? 'success'
+                            : log.status === 'pending'
+                            ? 'warning'
+                            : 'danger'
+                        }`}
+                      >
+                        {log.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

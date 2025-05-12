@@ -13,6 +13,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 import openpyxl
 from io import BytesIO
 from functools import wraps
+import pytz
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/api/reports')
 
@@ -34,19 +35,21 @@ def role_required(roles):
     return decorator
 
 def get_period_dates(period):
-    """Calculate start and end dates for the given period (weekly, monthly)."""
-    today = datetime.utcnow().replace(hour=23, minute=59, second=59, microsecond=999999)
+    """Calculate start and end dates for the given period (weekly, monthly) with timezone handling."""
+    tz = pytz.UTC
+    today = datetime.now(tz).replace(hour=23, minute=59, second=59, microsecond=999999)
     if period == 'weekly':
         start = today - timedelta(days=7)
         start = start.replace(hour=0, minute=0, second=0, microsecond=0)
         end = today
     elif period == 'monthly':
-        start = datetime(2025, 1, 1)
-        end = datetime(2025, 5, 31, 23, 59, 59, 999999)
+        start = datetime(2025, 1, 1, tzinfo=tz)
+        end = datetime(2025, 5, 31, 23, 59, 59, 999999, tzinfo=tz)
     else:
         start = today - timedelta(days=7)
         start = start.replace(hour=0, minute=0, second=0, microsecond=0)
         end = today
+    logger.info(f"Period: {period}, Start: {start}, End: {end}")
     return start, end
 
 def get_previous_period_dates(period, end_date):
@@ -60,6 +63,7 @@ def get_previous_period_dates(period, end_date):
     else:
         start = end_date - timedelta(days=7)
         end = end_date
+    logger.info(f"Previous Period: {period}, Start: {start}, End: {end}")
     return start, end
 
 def get_store_ids(user_id, role, store_id=None):
@@ -370,7 +374,7 @@ def get_payment_status_report():
                 {
                     'name': supplier.name,
                     'paid_amount': float(supplier.paid_amount or 0),
-                    'unpaid_amount': float(supplier.unpaid_amount or 0)
+                    'unpaid_amount': float(supplier.unpaid_amount)
                 } for supplier in suppliers_data
             ]
         }
@@ -523,6 +527,7 @@ def dashboard_summary():
             }), 200
 
         start, end = get_period_dates(period)
+        logger.info(f"Dashboard summary for period: {period}, stores: {store_ids}, start: {start}, end: {end}")
 
         # Stock data
         low_stock_query = (
@@ -538,6 +543,7 @@ def dashboard_summary():
         )
         low_stock_products = low_stock_query.all()
         low_stock_count = len(low_stock_products)
+        logger.info(f"Low stock count: {low_stock_count}")
 
         normal_stock_count = (
             db.session.query(func.count(Product.id))
@@ -547,6 +553,7 @@ def dashboard_summary():
             )
             .scalar() or 0
         )
+        logger.info(f"Normal stock count: {normal_stock_count}")
 
         # Sales data
         total_sales = (
@@ -557,6 +564,7 @@ def dashboard_summary():
             )
             .scalar() or 0.0
         )
+        logger.info(f"Total sales: {total_sales}")
 
         # Spoilage data
         spoilage_query = (
@@ -568,15 +576,16 @@ def dashboard_summary():
             )
         )
         total_spoilage = spoilage_query.with_entities(
-            func.sum(InventoryEntry.spoilage_quantity * InventoryEntry.buying_price)
+            func.coalesce(func.sum(InventoryEntry.spoilage_quantity * InventoryEntry.buying_price), 0)
         ).scalar() or 0.0
         total_inventory = db.session.query(
-            func.sum(InventoryEntry.quantity_received)
+            func.coalesce(func.sum(InventoryEntry.quantity_received), 1)
         ).filter(
             InventoryEntry.store_id.in_(store_ids),
             InventoryEntry.entry_date.between(start, end)
         ).scalar() or 1
         spoilage_percentage = (total_spoilage / total_inventory) * 100 if total_inventory > 0 else 0
+        logger.info(f"Total spoilage value: {total_spoilage}, Spoilage percentage: {spoilage_percentage}")
 
         # Supplier payments
         payment_data = db.session.query(
@@ -598,6 +607,7 @@ def dashboard_summary():
         total_payment = payment_data.paid_amount + payment_data.unpaid_amount
         paid_percentage = (payment_data.paid_amount / total_payment * 100) if total_payment > 0 else 0
         unpaid_percentage = (payment_data.unpaid_amount / total_payment * 100) if total_payment > 0 else 0
+        logger.info(f"Paid count: {payment_data.paid_count}, Paid amount: {payment_data.paid_amount}, Unpaid count: {payment_data.unpaid_count}, Unpaid amount: {payment_data.unpaid_amount}")
 
         data = {
             'low_stock_count': int(low_stock_count),
@@ -620,7 +630,7 @@ def dashboard_summary():
             'unpaid_percentage': round(unpaid_percentage, 2)
         }
 
-        logger.info(f"Dashboard summary retrieved for user ID: {current_user_id}, store IDs: {store_ids}")
+        logger.info(f"Dashboard summary retrieved for user ID: {current_user_id}, store IDs: {store_ids}, data: {data}")
         return jsonify({'status': 'success', 'data': data}), 200
 
     except Exception as e:
