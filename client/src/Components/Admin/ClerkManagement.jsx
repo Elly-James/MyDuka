@@ -1,473 +1,565 @@
-
-import { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Line } from 'react-chartjs-2';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
-
-// Register Chart.js components
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { api, handleApiError } from '../utils/api';
+import useSocket from '../hooks/useSocket';
+import SideBar from './SideBar';
+import NavBar from '../NavBar/NavBar';
+import './admin.css';
+import debounce from 'lodash/debounce';
 
 const ClerkManagement = () => {
   const [clerks, setClerks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    store: 'Nairobi Central',
-    accessLevel: 'standard'
-  });
+  const [stores, setStores] = useState([]);
+  const [inviteForm, setInviteForm] = useState({ name: '', email: '', store_ids: [] });
+  const [editForm, setEditForm] = useState(null); // { id, name, email, store_ids }
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const clerksPerPage = 10;
 
-  // Sample chart data - Replace with actual API data later
-  const chartData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-    datasets: [
-      {
-        label: 'Jane Smith',
-        data: [65, 59, 80, 81, 56, 55],
-        fill: false,
-        borderColor: 'rgb(75, 192, 192)',
-        tension: 0.1
-      },
-      {
-        label: 'John Doe',
-        data: [28, 48, 40, 19, 86, 27],
-        fill: false,
-        borderColor: 'rgb(255, 99, 132)',
-        tension: 0.1
-      },
-      {
-        label: 'Sarah Johnson',
-        data: [33, 25, 35, 51, 54, 76],
-        fill: false,
-        borderColor: 'rgb(53, 162, 235)',
-        tension: 0.1
-      }
-    ]
-  };
+  const { socket } = useSocket();
 
-  const chartOptions = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: 'top',
-      },
-      title: {
-        display: true,
-        text: 'Clerk Performance'
-      }
+  const fetchClerks = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await api.get(
+        `/api/users/clerks?search=${encodeURIComponent(searchTerm)}&page=${currentPage}&per_page=${clerksPerPage}`
+      );
+      console.log('Clerks response:', response.data); // Debug log
+      setClerks(response.data.clerks || []);
+      setTotalPages(response.data.pages || 1);
+    } catch (err) {
+      console.error('Error fetching clerks:', err); // Debug log
+      handleApiError(err, setError);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [currentPage, searchTerm]);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [clerksResponse, storesResponse] = await Promise.all([
+        api.get(
+          `/api/users/clerks?search=${encodeURIComponent(searchTerm)}&page=${currentPage}&per_page=${clerksPerPage}`
+        ),
+        api.get('/api/stores'),
+      ]);
+      console.log('Clerks response:', clerksResponse.data); // Debug log
+      console.log('Stores response:', storesResponse.data); // Debug log
+      setClerks(clerksResponse.data.clerks || []);
+      setTotalPages(clerksResponse.data.pages || 1);
+      setStores(storesResponse.data.stores || []);
+    } catch (err) {
+      console.error('Error fetching data:', err); // Debug log
+      handleApiError(err, setError);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPage, searchTerm]);
+
+  // Debounced search handler
+  const debouncedSearch = useMemo(
+    () => debounce((value) => {
+      setSearchTerm(value);
+      setCurrentPage(1);
+    }, 300),
+    []
+  );
 
   useEffect(() => {
-    // Fetch clerks from API
-    const fetchClerks = async () => {
-      try {
-        setLoading(true);
-        // Replace with actual API endpoint
-        const response = await axios.get('http://localhost:5000/api/users?role=CLERK', {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        setClerks(response.data);
-        setLoading(false);
-      } catch (err) {
-        setError('Failed to fetch clerks. Please try again later.');
-        setLoading(false);
-        console.error('Error fetching clerks:', err);
+    fetchData();
+
+    if (socket) {
+      socket.on('user_updated', (updatedUser) => {
+        setClerks((prev) =>
+          prev.map((clerk) =>
+            clerk.id === updatedUser.id
+              ? {
+                  ...clerk,
+                  ...updatedUser,
+                  stores: updatedUser.stores || clerk.stores,
+                  role: updatedUser.role,
+                  status: updatedUser.status,
+                }
+              : clerk
+          )
+        );
+        setSuccess('Clerk updated successfully');
+        setTimeout(() => setSuccess(''), 4000);
+      });
+
+      socket.on('user_deleted', ({ id }) => {
+        setClerks((prev) => prev.filter((clerk) => clerk.id !== id));
+        setSuccess('Clerk deleted successfully');
+        setTimeout(() => setSuccess(''), 4000);
+      });
+
+      socket.on('user_invited', (invitedUser) => {
+        setSuccess(`Invitation sent to ${invitedUser.email}`);
+        setTimeout(() => setSuccess(''), 4000);
+      });
+
+      socket.on('user_created', (newUser) => {
+        if (newUser.role === 'CLERK') {
+          setClerks((prev) => [newUser, ...prev]);
+          setSuccess(`New clerk ${newUser.email} has registered`);
+          setTimeout(() => setSuccess(''), 4000);
+        }
+      });
+
+      socket.on('new_notification', (notification) => {
+        if (['USER_INVITED', 'ACCOUNT_STATUS', 'ACCOUNT_DELETION'].includes(notification.type)) {
+          setSuccess(notification.message);
+          setTimeout(() => setSuccess(''), 4000);
+        }
+      });
+    }
+
+    return () => {
+      if (socket) {
+        socket.off('user_updated');
+        socket.off('user_deleted');
+        socket.off('user_invited');
+        socket.off('user_created');
+        socket.off('new_notification');
       }
     };
+  }, [fetchData, socket]);
 
-    fetchClerks();
-  }, []);
-
-  // For demo purposes, using sample data if API fails
-  useEffect(() => {
-    if (error) {
-      // Sample clerk data
-      setClerks([
-        { id: 1, name: 'Jane Smith', email: 'jane@myduka.com', lastActive: '2025-04-29', status: 'Active' },
-        { id: 2, name: 'John Doe', email: 'john@myduka.com', lastActive: '2025-04-28', status: 'Active' },
-        { id: 3, name: 'Sarah Johnson', email: 'sarah@myduka.com', lastActive: '2025-04-25', status: 'Inactive' },
-        { id: 4, name: 'David Lee', email: 'david@myduka.com', lastActive: '2025-04-27', status: 'Active' },
-        { id: 5, name: 'Maria Garcia', email: 'maria@myduka.com', lastActive: '2025-04-26', status: 'Active' },
-        { id: 6, name: 'Robert Chen', email: 'robert@myduka.com', lastActive: '2025-04-24', status: 'Inactive' },
-      ]);
-    }
-  }, [error]);
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-  };
-
-  const handleSubmit = async (e) => {
+  const handleInvite = async (e) => {
     e.preventDefault();
-    
+    setActionLoading((prev) => ({ ...prev, invite: true }));
+    setError('');
+    setSuccess('');
     try {
-      // Replace with actual API endpoint
-      await axios.post('http://localhost:5000/api/users/invite', 
-        {
-          name: formData.fullName,
-          email: formData.email,
-          store: formData.store,
-          role: 'CLERK',
-          accessLevel: formData.accessLevel
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        }
-      );
-      
-      // Success! Close modal and refresh list
+      await api.post('/api/auth/invite', {
+        name: inviteForm.name.trim(),
+        email: inviteForm.email.trim().toLowerCase(),
+        role: 'CLERK',
+        store_ids: inviteForm.store_ids.map(id => parseInt(id)),
+      });
+      setInviteForm({ name: '', email: '', store_ids: [] });
       setShowInviteModal(false);
-      // Refresh clerk list
-      const response = await axios.get('http://localhost:5000/api/users?role=CLERK', {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      setClerks(response.data);
-      
-      // Reset form
-      setFormData({
-        fullName: '',
-        email: '',
-        store: 'Nairobi Central',
-        accessLevel: 'standard'
-      });
-      
+      setSuccess('Invitation sent successfully');
+      setTimeout(() => setSuccess(''), 4000);
     } catch (err) {
-      console.error('Error inviting clerk:', err);
-      alert('Failed to send invitation. Please try again.');
+      console.error('Error sending invite:', err); // Debug log
+      handleApiError(err, setError);
+    } finally {
+      setActionLoading((prev) => ({ ...prev, invite: false }));
     }
   };
 
-  const handleStatusChange = async (clerkId, currentStatus) => {
+  const handleEdit = (clerk) => {
+    setEditForm({
+      id: clerk.id,
+      name: clerk.name,
+      email: clerk.email,
+      store_ids: clerk.stores.map((store) => store.id),
+    });
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setActionLoading((prev) => ({ ...prev, [editForm.id]: true }));
+    setError('');
+    setSuccess('');
     try {
-      const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
-      
-      // Replace with actual API endpoint
-      await axios.put(`http://localhost:5000/api/users/${clerkId}/status`, 
-        { status: newStatus.toLowerCase() },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        }
+      const response = await api.put(`/api/users/${editForm.id}`, {
+        name: editForm.name.trim(),
+        email: editForm.email.trim().toLowerCase(),
+        store_ids: editForm.store_ids,
+      });
+      const updatedUser = response.data.user;
+      setClerks((prev) =>
+        prev.map((clerk) =>
+          clerk.id === updatedUser.id
+            ? {
+                ...clerk,
+                ...updatedUser,
+                stores: updatedUser.stores || clerk.stores,
+                role: updatedUser.role,
+                status: updatedUser.status,
+              }
+            : clerk
+        )
       );
-      
-      // Update local state
-      setClerks(clerks.map(clerk => 
-        clerk.id === clerkId 
-          ? { ...clerk, status: newStatus } 
-          : clerk
-      ));
-      
+      setEditForm(null);
+      setSuccess('Clerk updated successfully');
+      setTimeout(() => setSuccess(''), 4000);
     } catch (err) {
-      console.error('Error updating clerk status:', err);
-      alert('Failed to update status. Please try again.');
+      console.error('Error updating clerk:', err); // Debug log
+      handleApiError(err, setError);
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [editForm.id]: false }));
     }
   };
 
-  const handleDelete = async (clerkId) => {
-    if (!window.confirm('Are you sure you want to delete this clerk?')) {
-      return;
-    }
-    
+  const handleStatusToggle = async (id, currentStatus) => {
+    const newStatus = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    setActionLoading((prev) => ({ ...prev, [id]: true }));
+    setError('');
+    setSuccess('');
     try {
-      // Replace with actual API endpoint
-      await axios.delete(`http://localhost:5000/api/users/${clerkId}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      // Remove from local state
-      setClerks(clerks.filter(clerk => clerk.id !== clerkId));
-      
+      const response = await api.put(`/api/users/${id}/status`, { status: newStatus });
+      const updatedUser = response.data.user;
+      setClerks((prev) =>
+        prev.map((clerk) =>
+          clerk.id === updatedUser.id
+            ? {
+                ...clerk,
+                ...updatedUser,
+                stores: updatedUser.stores || clerk.stores,
+                role: updatedUser.role,
+                status: updatedUser.status,
+              }
+            : clerk
+        )
+      );
+      setSuccess(`Clerk status updated to ${newStatus.toLowerCase()}`);
+      setTimeout(() => setSuccess(''), 4000);
     } catch (err) {
-      console.error('Error deleting clerk:', err);
-      alert('Failed to delete clerk. Please try again.');
+      console.error('Error toggling status:', err); // Debug log
+      handleApiError(err, setError);
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [id]: false }));
     }
   };
 
-  // Pagination logic
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentClerks = clerks.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(clerks.length / itemsPerPage);
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this clerk?')) {
+      setActionLoading((prev) => ({ ...prev, [id]: true }));
+      setError('');
+      setSuccess('');
+      try {
+        await api.delete(`/api/users/${id}`);
+        setClerks((prev) => prev.filter((clerk) => clerk.id !== id));
+        setSuccess('Clerk deleted successfully');
+        setTimeout(() => setSuccess(''), 4000);
+      } catch (err) {
+        console.error('Error deleting clerk:', err); // Debug log
+        handleApiError(err, setError);
+      } finally {
+        setActionLoading((prev) => ({ ...prev, [id]: false }));
+      }
+    }
+  };
+
+  const paginate = (pageNumber) => {
+    if (pageNumber >= 1 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber);
+    }
+  };
 
   return (
-    <div className="p-6 w-full">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Clerk Management</h1>
-        <button 
-          onClick={() => setShowInviteModal(true)}
-          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
-        >
-          + Add Clerk
-        </button>
-      </div>
+    <div className="admin-container flex min-h-screen bg-gray-100">
+      <SideBar />
+      <div className="main-content flex-1 p-6">
+        <NavBar />
+        {error && (
+          <p className="text-red-500 mb-4 bg-red-100 p-3 rounded">{error}</p>
+        )}
+        {success && (
+          <p className="text-green-500 mb-4 bg-green-100 p-3 rounded">{success}</p>
+        )}
+        {loading && (
+          <p className="text-gray-500 bg-gray-100 p-3 rounded">Loading...</p>
+        )}
 
-      {/* Clerks Table */}
-      <div className="bg-white rounded-lg shadow mb-8">
-        <div className="overflow-x-auto">
-          <table className="w-full table-auto">
+        <div className="card bg-white p-6 rounded-lg shadow">
+          <div className="header">
+            <h1 className="card-title text-2xl font-bold">Clerk Management</h1>
+            <button 
+              onClick={() => setShowInviteModal(true)}
+              className="btn-primary px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+            >
+              + Invite Clerk
+            </button>
+          </div>
+
+          <div className="flex justify-between items-center mb-4 mt-4">
+            <input
+              type="text"
+              placeholder="Search clerks by name, email, or store..."
+              onChange={(e) => debouncedSearch(e.target.value)}
+              className="p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          {showInviteModal && (
+            <div className="modal-overlay fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+              <div className="modal-content bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+                <h3 className="modal-title text-xl font-bold mb-4">Invite New Clerk</h3>
+                <form onSubmit={handleInvite} className="invite-form space-y-4">
+                  <div className="form-group">
+                    <label htmlFor="name" className="form-label text-gray-700">
+                      Name
+                    </label>
+                    <input
+                      type="text"
+                      id="name"
+                      value={inviteForm.name}
+                      onChange={(e) =>
+                        setInviteForm({ ...inviteForm, name: e.target.value })
+                      }
+                      className="form-input p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Enter clerk name"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="email" className="form-label text-gray-700">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      id="email"
+                      value={inviteForm.email}
+                      onChange={(e) =>
+                        setInviteForm({ ...inviteForm, email: e.target.value })
+                      }
+                      className="form-input p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Enter clerk email"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="store_ids" className="form-label text-gray-700">
+                      Stores
+                    </label>
+                    <select
+                      id="store_ids"
+                      multiple
+                      value={inviteForm.store_ids}
+                      onChange={(e) =>
+                        setInviteForm({
+                          ...inviteForm,
+                          store_ids: Array.from(
+                            e.target.selectedOptions,
+                            (option) => parseInt(option.value)
+                          ),
+                        })
+                      }
+                      className="form-input p-2 border border-gray-300 rounded-lg w-full max-h-40 overflow-y-auto focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      required
+                    >
+                      {stores.length > 0 ? (
+                        stores.map((store) => (
+                          <option key={store.id} value={store.id}>
+                            {store.name}
+                          </option>
+                        ))
+                      ) : (
+                        <option disabled>No stores available</option>
+                      )}
+                    </select>
+                  </div>
+                  <div className="modal-actions flex gap-4">
+                    <button
+                      type="submit"
+                      className="button px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                      disabled={actionLoading.invite}
+                    >
+                      {actionLoading.invite ? 'Sending...' : 'Send Invite'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInviteForm({ name: '', email: '', store_ids: [] });
+                        setShowInviteModal(false);
+                      }}
+                      className="button px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          <table className="table w-full mb-6 border-collapse">
             <thead>
-              <tr className="bg-gray-50 text-left">
-                <th className="px-6 py-3 text-gray-600 font-semibold">Name</th>
-                <th className="px-6 py-3 text-gray-600 font-semibold">Email</th>
-                <th className="px-6 py-3 text-gray-600 font-semibold">Last Active</th>
-                <th className="px-6 py-3 text-gray-600 font-semibold">Status</th>
-                <th className="px-6 py-3 text-gray-600 font-semibold">Actions</th>
+              <tr className="bg-gray-200">
+                <th className="p-3 text-left">Name</th>
+                <th className="p-3 text-left">Email</th>
+                <th className="p-3 text-left">Stores</th>
+                <th className="p-3 text-left">Status</th>
+                <th className="p-3 text-left">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan="5" className="text-center py-4">Loading...</td>
-                </tr>
-              ) : currentClerks.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="text-center py-4">No clerks found</td>
-                </tr>
-              ) : (
-                currentClerks.map((clerk) => (
-                  <tr key={clerk.id} className="border-t border-gray-100">
-                    <td className="px-6 py-4">{clerk.name}</td>
-                    <td className="px-6 py-4">{clerk.email}</td>
-                    <td className="px-6 py-4">{clerk.lastActive}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-sm ${
-                        clerk.status === 'Active' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
+              {clerks.length > 0 ? (
+                clerks.map((clerk) => (
+                  <tr key={clerk.id} className="border-b">
+                    <td className="p-3">
+                      {editForm && editForm.id === clerk.id ? (
+                        <input
+                          type="text"
+                          value={editForm.name}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, name: e.target.value })
+                          }
+                          className="p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          required
+                        />
+                      ) : (
+                        clerk.name
+                      )}
+                    </td>
+                    <td className="p-3">
+                      {editForm && editForm.id === clerk.id ? (
+                        <input
+                          type="email"
+                          value={editForm.email}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, email: e.target.value })
+                          }
+                          className="p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          required
+                        />
+                      ) : (
+                        clerk.email
+                      )}
+                    </td>
+                    <td className="p-3">
+                      {editForm && editForm.id === clerk.id ? (
+                        <select
+                          multiple
+                          value={editForm.store_ids}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              store_ids: Array.from(
+                                e.target.selectedOptions,
+                                (option) => parseInt(option.value)
+                              ),
+                            })
+                          }
+                          className="p-2 border border-gray-300 rounded-lg w-full max-h-40 overflow-y-auto focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          {stores.map((store) => (
+                            <option key={store.id} value={store.id}>
+                              {store.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        clerk.stores?.map((store) => store.name).join(', ') || 'N/A'
+                      )}
+                    </td>
+                    <td className="p-3">
+                      <span
+                        className={`status-badge px-2 py-1 rounded-full text-sm ${
+                          clerk.status === 'ACTIVE'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
                         {clerk.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex space-x-2">
-                        <button 
-                          onClick={() => handleStatusChange(clerk.id, clerk.status)}
-                          className="text-gray-500 hover:text-gray-700"
-                          title={clerk.status === 'Active' ? 'Deactivate' : 'Activate'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                          </svg>
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(clerk.id)}
-                          className="text-red-500 hover:text-red-700"
-                          title="Delete"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                          </svg>
-                        </button>
-                      </div>
+                    <td className="p-3 space-x-2">
+                      {editForm && editForm.id === clerk.id ? (
+                        <>
+                          <button
+                            onClick={handleEditSubmit}
+                            className="button-action px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                            disabled={actionLoading[clerk.id]}
+                          >
+                            {actionLoading[clerk.id] ? 'Saving...' : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => setEditForm(null)}
+                            className="button-action px-3 py-1 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleEdit(clerk)}
+                            className="button-action px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            disabled={actionLoading[clerk.id]}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleStatusToggle(clerk.id, clerk.status)}
+                            className="button-action px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                            disabled={actionLoading[clerk.id]}
+                          >
+                            {actionLoading[clerk.id]
+                              ? 'Processing...'
+                              : clerk.status === 'ACTIVE'
+                              ? 'Deactivate'
+                              : 'Activate'}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(clerk.id)}
+                            className="button-action px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                            disabled={actionLoading[clerk.id]}
+                          >
+                            {actionLoading[clerk.id] ? 'Processing...' : 'Delete'}
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))
+              ) : (
+                <tr>
+                  <td colSpan="5" className="text-center text-gray-500 p-3">
+                    No clerks found
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
-        </div>
-        
-        {/* Pagination */}
-        {clerks.length > itemsPerPage && (
-          <div className="flex justify-center space-x-1 p-4">
-            <button 
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+
+          <div className="flex justify-between items-center mt-4">
+            <button
+              className="pagination-button px-3 py-1 rounded-lg bg-gray-200 text-gray-700 disabled:opacity-50"
+              onClick={() => paginate(currentPage - 1)}
               disabled={currentPage === 1}
-              className={`px-3 py-1 rounded ${
-                currentPage === 1 
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
             >
-              &lt;
+              Previous
             </button>
-            
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-              <button
-                key={page}
-                onClick={() => setCurrentPage(page)}
-                className={`px-3 py-1 rounded ${
-                  currentPage === page
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                {page}
-              </button>
-            ))}
-            
-            <button 
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            <div className="flex gap-2">
+              {Array.from({ length: totalPages }, (_, i) => (
+                <button
+                  key={i + 1}
+                  className={`pagination-button px-3 py-1 rounded-lg ${
+                    currentPage === i + 1
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}
+                  onClick={() => paginate(i + 1)}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+            <button
+              className="pagination-button px-3 py-1 rounded-lg bg-gray-200 text-gray-700 disabled:opacity-50"
+              onClick={() => paginate(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className={`px-3 py-1 rounded ${
-                currentPage === totalPages 
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
             >
-              &gt;
+              Next
             </button>
           </div>
-        )}
-      </div>
-
-      {/* Performance Chart */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold mb-4">Clerk Performance</h2>
-        <div className="h-64">
-          <Line data={chartData} options={chartOptions} />
         </div>
       </div>
-
-      {/* Invite Clerk Modal */}
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Invite Clerk</h2>
-              <button 
-                onClick={() => setShowInviteModal(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            
-            <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <h3 className="text-lg font-medium mb-2">Clerk Details</h3>
-                
-                <div className="mb-4">
-                  <label className="block text-gray-700 mb-2">Full Name</label>
-                  <input
-                    type="text"
-                    name="fullName"
-                    value={formData.fullName}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    required
-                  />
-                </div>
-                
-                <div className="mb-4">
-                  <label className="block text-gray-700 mb-2">Email Address</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    required
-                  />
-                </div>
-                
-                <div className="mb-4">
-                  <label className="block text-gray-700 mb-2">Store</label>
-                  <select
-                    name="store"
-                    value={formData.store}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="Nairobi Central">Nairobi Central</option>
-                    <option value="Downtown Branch">Downtown Branch</option>
-                    <option value="Mall Outlet">Mall Outlet</option>
-                  </select>
-                </div>
-                
-                <div className="mb-4">
-                  <label className="block text-gray-700 mb-2">Access Level</label>
-                  <div className="flex space-x-4">
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="accessLevel"
-                        value="standard"
-                        checked={formData.accessLevel === 'standard'}
-                        onChange={handleInputChange}
-                        className="mr-2"
-                      />
-                      Standard Access
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="accessLevel"
-                        value="limited"
-                        checked={formData.accessLevel === 'limited'}
-                        onChange={handleInputChange}
-                        className="mr-2"
-                      />
-                      Limited Access
-                    </label>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowInviteModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-                >
-                  Send Invitation
-                </button>
-              </div>
-            </form>
-            
-            <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-md flex items-start">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-              </svg>
-              <span className="text-sm">
-                An email with registration instructions will be sent to the clerk.
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-export default ClerkManagement;
-=======
-// src/Components/Admin/Dashboard.jsx
-import React from 'react';
-import SideBar from './SideBar';
-
-const Dashboard = () => (
-  <div className="flex h-screen bg-gray-100">
-    <SideBar />
-    <div className="flex-1 p-6">
-      <h1 className="text-2xl font-bold mb-6">Admin Dashboard (Placeholder)</h1>
-      <p>This feature will be implemented soon.</p>
-    </div>
-  </div>
-);
-
-export default Dashboard;
-
+export default React.memo(ClerkManagement);

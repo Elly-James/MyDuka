@@ -1,292 +1,157 @@
-
+// src/Components/Admin/Payments.jsx
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { useAuth } from '../context/AuthContext';
+import { api, handleApiError, formatCurrency } from '../utils/api';
+import SideBar from './SideBar';
+import NavBar from '../NavBar/NavBar';
 import './admin.css';
 
 const Payments = () => {
   const [payments, setPayments] = useState([]);
+  const [filtered, setFiltered] = useState([]);
   const [activeTab, setActiveTab] = useState('unpaid');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [totalUnpaid, setTotalUnpaid] = useState(0);
-  const [totalPaid, setTotalPaid] = useState(0);
-  const [searchTerm, setSearchTerm] = useState('');
-  const itemsPerPage = 5;
-
-  const { token } = useAuth();
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [stats, setStats] = useState({
+    total_unpaid: 0,
+    total_paid: 0
+  });
 
   useEffect(() => {
+    const fetchPayments = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get('/api/payments');
+        const data = response.data;
+        
+        setPayments(data.payments);
+        setStats({
+          total_unpaid: data.total_unpaid,
+          total_paid: data.total_paid
+        });
+        
+      } catch (err) {
+        handleApiError(err, setError);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchPayments();
-  }, [activeTab, currentPage, searchTerm]);
+  }, []);
 
-  const fetchPayments = async () => {
-    setLoading(true);
+  useEffect(() => {
+    const filteredList = payments.filter(payment => {
+      const matchesTab = payment.status === activeTab;
+      const matchesSearch = payment.supplier_name.toLowerCase().includes(search.toLowerCase());
+      return matchesTab && matchesSearch;
+    });
+    setFiltered(filteredList);
+  }, [activeTab, search, payments]);
+
+  const handleMarkAsPaid = async (paymentId) => {
     try {
-      // In a real implementation, you would call your API endpoint
-      // const response = await axios.get(`/api/payments?status=${activeTab}&page=${currentPage}&search=${searchTerm}`, {
-      //   headers: { Authorization: `Bearer ${token}` }
-      // });
-      
-      // For demonstration, using mock data similar to the image
-      const mockData = {
-        data: [
-          { 
-            id: 1, 
-            supplier: 'Majani Suppliers', 
-            product: 'Rice (5kg bags)', 
-            amount: 45000, 
-            dueDate: '2025-04-25', 
-            status: 'unpaid' 
-          },
-          { 
-            id: 2, 
-            supplier: 'Kaka Oil Dist.', 
-            product: 'Cooking Oil (2L)', 
-            amount: 36000, 
-            dueDate: '2025-04-30', 
-            status: 'unpaid' 
-          },
-          { 
-            id: 3, 
-            supplier: 'Sweet Sugar Co.', 
-            product: 'Sugar (1kg packs)', 
-            amount: 64620, 
-            dueDate: '2025-04-15', 
-            status: 'unpaid',
-            overdue: true
-          },
-        ],
-        meta: {
-          total: 14,
-          unpaidTotal: 145620,
-          paidTotal: 273450
-        }
-      };
-
-      // Filter based on activeTab
-      const filteredData = mockData.data.filter(payment => 
-        payment.status === activeTab && 
-        (searchTerm === '' || payment.supplier.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
-
-      setPayments(filteredData);
-      setTotalItems(mockData.meta.total);
-      setTotalUnpaid(mockData.meta.unpaidTotal);
-      setTotalPaid(mockData.meta.paidTotal);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching payments:', error);
-      setLoading(false);
+      await api.put(`/api/payments/${paymentId}/mark-paid`);
+      setPayments(payments.map(p => 
+        p.id === paymentId ? { ...p, status: 'paid' } : p
+      ));
+      setStats(prev => ({
+        total_unpaid: prev.total_unpaid - p.amount,
+        total_paid: prev.total_paid + p.amount
+      }));
+    } catch (err) {
+      handleApiError(err, setError);
     }
   };
-
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    setCurrentPage(1);
-  };
-
-  const handleSearch = (e) => {
-    setSearchTerm(e.target.value);
-    setCurrentPage(1);
-  };
-
-  const markAsPaid = async (id) => {
-    try {
-      // In real implementation, you would call your API
-      // await axios.put(`/api/payments/${id}/mark-paid`, {}, {
-      //   headers: { Authorization: `Bearer ${token}` }
-      // });
-      
-      // For demonstration, update the local state
-      const updatedPayments = payments.filter(payment => payment.id !== id);
-      setPayments(updatedPayments);
-      
-      // Refetch to update the counts
-      fetchPayments();
-    } catch (error) {
-      console.error('Error marking payment as paid:', error);
-    }
-  };
-
-  const markAllPaid = async () => {
-    try {
-      // In real implementation, you would call your API
-      // await axios.put('/api/payments/mark-all-paid', {}, {
-      //   headers: { Authorization: `Bearer ${token}` }
-      // });
-      
-      // For demonstration, clear all current items
-      setPayments([]);
-      
-      // Refetch to update the counts
-      fetchPayments();
-    } catch (error) {
-      console.error('Error marking all payments as paid:', error);
-    }
-  };
-
-  const formatCurrency = (amount) => {
-    return `KSh ${amount.toLocaleString()}`;
-  };
-
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    const month = date.toLocaleString('default', { month: 'short' });
-    const day = date.getDate();
-    
-    // Check if date is past due
-    const isPastDue = date < new Date();
-    
-    if (isPastDue) {
-      return <span className="text-red-500 font-medium">Overdue</span>;
-    }
-    
-    return `${month} ${day}`;
-  };
-
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   return (
-    <div className="payment-tracking-container">
-      <h1 className="page-title">Payment Tracking</h1>
-      
-      <div className="summary-cards">
-        <div className="summary-card">
-          <h3 className="card-title">Total Unpaid</h3>
-          <p className="amount unpaid">{formatCurrency(totalUnpaid)}</p>
+    <div className="admin-container">
+      <SideBar />
+      <div className="main-content">
+        <NavBar />
+        
+        {error && <div className="alert error">{error}</div>}
+        {loading && <div className="loading">Loading payments...</div>}
+
+        <h1>Payment Tracking</h1>
+        
+        <div className="stats">
+          <div className="stat-card">
+            <h3>Total Unpaid</h3>
+            <p className="amount unpaid">{formatCurrency(stats.total_unpaid)}</p>
+          </div>
+          <div className="stat-card">
+            <h3>Total Paid</h3>
+            <p className="amount paid">{formatCurrency(stats.total_paid)}</p>
+          </div>
         </div>
         
-        <div className="summary-card">
-          <h3 className="card-title">Paid This Month</h3>
-          <p className="amount paid">{formatCurrency(totalPaid)}</p>
-        </div>
-      </div>
-      
-      <div className="payment-controls">
         <div className="tabs">
-          <button 
-            className={`tab ${activeTab === 'paid' ? 'active' : ''}`}
-            onClick={() => handleTabChange('paid')}
-          >
-            Paid
-          </button>
-          <button 
+          <button
             className={`tab ${activeTab === 'unpaid' ? 'active' : ''}`}
-            onClick={() => handleTabChange('unpaid')}
+            onClick={() => setActiveTab('unpaid')}
           >
             Unpaid
+          </button>
+          <button
+            className={`tab ${activeTab === 'paid' ? 'active' : ''}`}
+            onClick={() => setActiveTab('paid')}
+          >
+            Paid
           </button>
         </div>
         
         <div className="search-container">
           <input
             type="text"
-            placeholder="🔍 Search supplier..."
-            value={searchTerm}
-            onChange={handleSearch}
-            className="search-input"
+            placeholder="Search suppliers..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-      </div>
-      
-      {loading ? (
-        <p className="loading">Loading payments...</p>
-      ) : (
-        <>
-          <table className="payments-table">
+        
+        <div className="card">
+          <table className="table">
             <thead>
               <tr>
                 <th>Supplier</th>
                 <th>Product</th>
                 <th>Amount</th>
                 <th>Due Date</th>
+                <th>Status</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              {payments.map((payment) => (
+              {filtered.map(payment => (
                 <tr key={payment.id}>
-                  <td>{payment.supplier}</td>
-                  <td>{payment.product}</td>
+                  <td>{payment.supplier_name}</td>
+                  <td>{payment.product_name}</td>
                   <td>{formatCurrency(payment.amount)}</td>
-                  <td className={payment.overdue ? 'overdue' : ''}>
-                    {formatDate(payment.dueDate)}
+                  <td>{new Date(payment.due_date).toLocaleDateString()}</td>
+                  <td>
+                    <span className={`badge ${payment.status === 'paid' ? 'success' : 'warning'}`}>
+                      {payment.status}
+                    </span>
                   </td>
                   <td>
-                    <button 
-                      className="action-button mark-paid"
-                      onClick={() => markAsPaid(payment.id)}
-                    >
-                      ✓
-                    </button>
+                    {payment.status === 'unpaid' && (
+                      <button 
+                        onClick={() => handleMarkAsPaid(payment.id)}
+                        className="btn-sm success"
+                      >
+                        Mark as Paid
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
-              {payments.length === 0 && (
-                <tr>
-                  <td colSpan="5" className="no-data">
-                    No {activeTab} payments found.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
-          
-          {activeTab === 'unpaid' && payments.length > 0 && (
-            <div className="mark-all-container">
-              <button 
-                className="mark-all-button"
-                onClick={markAllPaid}
-              >
-                Mark All as Paid
-              </button>
-            </div>
-          )}
-          
-          {totalItems > itemsPerPage && (
-            <div className="pagination">
-              <span className="page-info">
-                {`${(currentPage - 1) * itemsPerPage + 1}-${Math.min(currentPage * itemsPerPage, totalItems)} of ${totalItems} items`}
-              </span>
-              <button 
-                className="page-nav prev"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              >
-                ◄
-              </button>
-              <button className="page-number active">1</button>
-              <button className="page-number">2</button>
-              <button 
-                className="page-nav next"
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              >
-                ►
-              </button>
-            </div>
-          )}
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 };
-=======
-// src/Components/Admin/Payments.jsx
-import React from 'react';
-import SideBar from './SideBar';
-
-const Payments = () => (
-  <div className="flex h-screen bg-gray-100">
-    <SideBar />
-    <div className="flex-1 p-6">
-      <h1 className="text-2xl font-bold mb-6">Payments (Admin - Placeholder)</h1>
-      <p>This feature will be implemented soon.</p>
-    </div>
-  </div>
-);
-
 
 export default Payments;

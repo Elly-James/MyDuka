@@ -18,11 +18,17 @@ export const AuthProvider = ({ children }) => {
       const userResponse = await api.get('/api/auth/me');
       const updatedUser = {
         token: newToken,
-        role: userResponse.data.user.role, // Role is now a string (e.g., "MERCHANT")
+        role: userResponse.data.user.role.toUpperCase(), // Ensure uppercase
         name: userResponse.data.user.name,
         email: userResponse.data.user.email,
-        store: userResponse.data.user.store || null, // Expect store object or null
+        store: userResponse.data.user.store || null,
+        status: userResponse.data.user.status // Add status check
       };
+
+      // Check if user is active
+      if (updatedUser.status !== 'ACTIVE') {
+        throw new Error('Your account is not active');
+      }
 
       setUser(updatedUser);
       localStorage.setItem('token', newToken);
@@ -70,7 +76,7 @@ export const AuthProvider = ({ children }) => {
         // Set up token refresh before expiration
         const decoded = jwtDecode(token);
         const expiresIn = decoded.exp * 1000 - Date.now();
-        const refreshTime = Math.max(expiresIn - 60000, 0); // Refresh 1 min before expiration
+        const refreshTime = Math.max(expiresIn - 60000, 0);
 
         if (refreshTime > 0) {
           setTokenRefreshInterval(setTimeout(() => refreshToken(), refreshTime));
@@ -81,11 +87,17 @@ export const AuthProvider = ({ children }) => {
         const serverUser = response.data.user;
         const updatedUser = {
           token,
-          role: serverUser.role, // Role is now a string (e.g., "MERCHANT")
+          role: serverUser.role.toUpperCase(),
           name: serverUser.name,
           email: serverUser.email,
-          store: serverUser.store || null, // Expect store object or null
+          store: serverUser.store || null,
+          status: serverUser.status
         };
+
+        // Check if user is active
+        if (updatedUser.status !== 'ACTIVE') {
+          throw new Error('Your account is not active');
+        }
 
         setUser(updatedUser);
         localStorage.setItem('user', JSON.stringify(updatedUser));
@@ -112,15 +124,16 @@ export const AuthProvider = ({ children }) => {
     };
   }, [initializeAuth]);
 
-  const login = (token, userData, onNavigation) => {
+  const login = (token, userData) => {
     // Normalize role and store user data
-    const normalizedRole = userData.role; // Role is already a string (e.g., "MERCHANT")
+    const normalizedRole = userData.role.toUpperCase();
     const newUser = {
       token,
       role: normalizedRole,
       name: userData.name,
       email: userData.email,
-      store: userData.store || null, // Expect store object or null
+      store: userData.store || null,
+      status: userData.status
     };
 
     // Store tokens and user data
@@ -131,7 +144,7 @@ export const AuthProvider = ({ children }) => {
     // Set up token refresh before expiration
     const decoded = jwtDecode(token);
     const expiresIn = decoded.exp * 1000 - Date.now();
-    const refreshTime = Math.max(expiresIn - 60000, 0); // Refresh 1 min before expiration
+    const refreshTime = Math.max(expiresIn - 60000, 0);
 
     if (refreshTime > 0) {
       setTokenRefreshInterval(setTimeout(() => refreshToken(), refreshTime));
@@ -141,12 +154,20 @@ export const AuthProvider = ({ children }) => {
       console.log('User logged in:', newUser);
     }
 
-    // Navigate after state update
-    setTimeout(() => {
-      if (onNavigation) {
-        onNavigation(normalizedRole);
-      }
-    }, 100);
+    // Immediate navigation based on role
+    switch (normalizedRole) {
+      case ROLES.MERCHANT:
+        window.location.href = ROUTES.MERCHANT_DASHBOARD;
+        break;
+      case ROLES.ADMIN:
+        window.location.href = '/admin/clerk-management';
+        break;
+      case ROLES.CLERK:
+        window.location.href = '/clerk/stock-entry';
+        break;
+      default:
+        window.location.href = ROUTES.LOGIN;
+    }
   };
 
   const logout = () => {

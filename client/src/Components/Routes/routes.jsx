@@ -15,7 +15,7 @@ import PaymentTracking from '../Merchant/PaymentTracking.jsx';
 import StoreReports from '../Merchant/StoreReports.jsx';
 
 // Admin Components
-import AdminDashboard from '../Admin/Dashboard.jsx';
+
 import ClerkManagement from '../Admin/ClerkManagement.jsx';
 import InventoryOverview from '../Admin/InventoryOverview.jsx';
 import AdminPayments from '../Admin/Payments.jsx';
@@ -132,7 +132,7 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
             <ErrorBoundary>
-              <AdminDashboard />
+           
             </ErrorBoundary>
           </ProtectedRoute>
         }

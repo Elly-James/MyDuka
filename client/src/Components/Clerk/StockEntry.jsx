@@ -1,115 +1,151 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+// src/Components/Clerk/StockEntry.jsx
+import React, { useState, useEffect } from 'react';
+import { api, handleApiError } from '../utils/api';
+import SideBar from './SideBar';
+import NavBar from '../NavBar/NavBar';
+import './clerk.css';
 
-// StockEntry component that allows the clerks to submit new inventory entries
 const StockEntry = () => {
   const [form, setForm] = useState({
-    product_name: '',
-    quantity: '',
-    price: '',
-    payment_status: '',
-    spoilage_count: '',
+    product_id: '',
+    quantity_received: '',
+    buying_price: '',
+    payment_status: 'unpaid',
+    spoilage_count: '0'
   });
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  // This Updates the form state in the input fields as the user types 
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get('/api/products');
+        setProducts(response.data.products);
+      } catch (err) {
+        handleApiError(err, setError);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
+
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
   };
 
-  // This Handles the form submission
   const handleSubmit = async (e) => {
-    e.preventDefault(); 
-
+    e.preventDefault();
     try {
-      // Getting the token from localStorage for authentication
-      const token = localStorage.getItem('token');
-
-      // Sending a POST request to the backend with the form data
-      await axios.post(
-        'http://localhost:5000/api/inventory/entries',
-        form,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      // If it is successful, show a success message and then reset the form
-      alert('Stock entry added successfully');
-      setForm({ 
-        product_name: '', 
-        quantity: '', 
-        price: '', 
-        payment_status: '', 
-        spoilage_count: '' 
+      setLoading(true);
+      await api.post('/api/inventory/entries', form);
+      setSuccess('Stock entry added successfully');
+      // Reset form
+      setForm({
+        product_id: '',
+        quantity_received: '',
+        buying_price: '',
+        payment_status: 'unpaid',
+        spoilage_count: '0'
       });
-
     } catch (err) {
-      // If there is an error, show the error alert 
-      alert('Error submitting entry');
-      console.error(err);
+      handleApiError(err, setError);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // JSX returned by the component
   return (
-    <div>
-      <h2>Add Stock Entry</h2>
-
-      {/* Form for submitting stock entry */}
-      <form onSubmit={handleSubmit}>
+    <div className="clerk-container">
+      <SideBar />
+      <div className="main-content">
+        <NavBar />
         
-        {/* Product Name Input */}
-        <input
-          type="text"
-          name="product_name"
-          placeholder="Product Name"
-          value={form.product_name}
-          onChange={handleChange}
-          required
-        />
+        {error && <div className="alert error">{error}</div>}
+        {success && <div className="alert success">{success}</div>}
+        {loading && <div className="loading">Loading products...</div>}
 
-        {/* The Quantity Input */}
-        <input
-          type="number"
-          name="quantity"
-          placeholder="Quantity Received"
-          value={form.quantity}
-          onChange={handleChange}
-          required
-        />
-
-        {/* The Price Input */}
-        <input
-          type="number"
-          name="price"
-          placeholder="Price (KSh)"
-          value={form.price}
-          onChange={handleChange}
-          required
-        />
-
-        {/* Dropdown for Payment Status  */}
-        <select
-          name="payment_status"
-          value={form.payment_status}
-          onChange={handleChange}
-          required
-        >
-          <option value="">Select status</option>
-          <option value="PAID">Paid</option>
-          <option value="UNPAID">Unpaid</option>
-        </select>
-
-        {/* The Spoilage Count Input */}
-        <input
-          type="number"
-          name="spoilage_count"
-          placeholder="Spoilage Count"
-          value={form.spoilage_count}
-          onChange={handleChange}
-        />
-
-        {/* The Submit Button */}
-        <button type="submit">Submit</button>
-      </form>
+        <h1>Stock Entry</h1>
+        
+        <div className="card">
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label>Product</label>
+              <select
+                name="product_id"
+                value={form.product_id}
+                onChange={handleChange}
+                required
+              >
+                <option value="">Select Product</option>
+                {products.map(product => (
+                  <option key={product.id} value={product.id}>
+                    {product.name} (Current: {product.current_stock})
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="form-group">
+              <label>Quantity Received</label>
+              <input
+                type="number"
+                name="quantity_received"
+                value={form.quantity_received}
+                onChange={handleChange}
+                min="1"
+                required
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Buying Price (KSh)</label>
+              <input
+                type="number"
+                name="buying_price"
+                value={form.buying_price}
+                onChange={handleChange}
+                min="0"
+                step="0.01"
+                required
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Payment Status</label>
+              <select
+                name="payment_status"
+                value={form.payment_status}
+                onChange={handleChange}
+                required
+              >
+                <option value="unpaid">Unpaid</option>
+                <option value="paid">Paid</option>
+              </select>
+            </div>
+            
+            <div className="form-group">
+              <label>Spoilage Count (if any)</label>
+              <input
+                type="number"
+                name="spoilage_count"
+                value={form.spoilage_count}
+                onChange={handleChange}
+                min="0"
+              />
+            </div>
+            
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Submitting...' : 'Submit Entry'}
+            </button>
+          </form>
+        </div>
+      </div>
     </div>
   );
 };

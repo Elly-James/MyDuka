@@ -33,6 +33,23 @@ def get_store_ids(user_id, role, store_id=None):
             return []
         return store_ids
 
+def get_period_dates(period):
+    """Helper function to get date ranges for reporting periods, aligned with reports.py."""
+    today = datetime.utcnow().replace(hour=23, minute=59, second=59, microsecond=999999)
+    if period == 'weekly':
+        start = today - timedelta(days=7)
+        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = today
+    elif period == 'monthly':
+        start = today - timedelta(days=30)
+        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = today
+    else:  # Default to weekly
+        start = today - timedelta(days=7)
+        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = today
+    return start, end
+
 @inventory_bp.route('/products', methods=['GET', 'POST'])
 @jwt_required()
 def manage_products():
@@ -881,11 +898,13 @@ def approve_supply_request(request_id):
         logger.error("Error in approve_supply_request for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
-@inventory_bp.route('/update-payment/<int:entry_id>', methods=['PUT'])
+@inventory_bp.route('/update-payment', methods=['PUT'])
 @jwt_required()
-def update_payment(entry_id):
+def update_payment():
     """
-    Update the payment status of an inventory entry to PAID.
+    Update the payment status of one or more inventory entries to PAID.
+    Request Body:
+        - entry_ids (list of int): List of inventory entry IDs to update
     """
     try:
         identity = get_jwt_identity()
@@ -895,56 +914,61 @@ def update_payment(entry_id):
                            identity.get('id', 'unknown'), current_user.role.name if current_user else 'none')
             return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
 
-        entry = db.session.get(InventoryEntry, entry_id)
-        if not entry:
-            logger.error("Inventory entry not found: %s for user ID: %s", entry_id, current_user.id)
-            return jsonify({'status': 'error', 'message': 'Inventory entry not found'}), 404
+        data = request.get_json()
+        if not data or not data.get('entry_ids'):
+            logger.error("No entry IDs provided for payment update by user ID: %s", current_user.id)
+            return jsonify({'status': 'error', 'message': 'Entry IDs are required'}), 400
 
-        product = db.session.get(Product, entry.product_id)
-        if not product:
-            logger.error("Product not found for entry: %s for user ID: %s", entry_id, current_user.id)
-            return jsonify({'status': 'error', 'message': 'Product not found'}), 404
-
-        store_ids = get_store_ids(current_user.id, current_user.role, product.store_id)
-        if product.store_id not in store_ids:
-            logger.warning("User ID: %s attempted to update payment for unauthorized store: %s",
-                           current_user.id, product.store_id)
-            return jsonify({'status': 'error', 'message': 'You can only update payments for your store'}), 403
+        entry_ids = data['entry_ids']
+        updated_entries = []
 
         with db.session.begin_nested():
-            entry.payment_status = PaymentStatus.PAID
-            entry.payment_date = datetime.utcnow()
-            db.session.flush()
+            for entry_id in entry_ids:
+                entry = db.session.get(InventoryEntry, entry_id)
+                if not entry:
+                    logger.warning("Inventory entry not found: %s for user ID: %s", entry_id, current_user.id)
+                    continue
 
-            users_to_notify = db.session.query(User).filter(
-                user_store.c.user_id == User.id,
-                user_store.c.store_id == product.store_id,
-                User.role.in_([UserRole.ADMIN, UserRole.MERCHANT])
-            ).all()
-            for user in users_to_notify:
-                notification = Notification(
-                    user_id=user.id,
-                    message=f"Payment status for inventory entry of product '{product.name}' updated to PAID."
-                )
-                db.session.add(notification)
-                db.session.flush()
-                socketio.emit('new_notification', {
-                    'id': notification.id,
-                    'message': notification.message,
-                    'created_at': notification.created_at.isoformat()
-                }, room=f'user_{user.id}')
+                product = db.session.get(Product, entry.product_id)
+                if not product:
+                    logger.warning("Product not found for entry: %s for user ID: %s", entry_id, current_user.id)
+                    continue
 
-            socketio.emit('payment_updated', {
-                'message': f'Payment status updated for entry {entry_id}'
-            }, broadcast=True)
+                store_ids = get_store_ids(current_user.id, current_user.role, product.store_id)
+                if product.store_id not in store_ids:
+                    logger.warning("User ID: %s attempted to update payment for unauthorized store: %s",
+                                   current_user.id, product.store_id)
+                    continue
+
+                entry.payment_status = PaymentStatus.PAID
+                entry.payment_date = datetime.utcnow()
+                updated_entries.append(entry)
+
+                users_to_notify = db.session.query(User).filter(
+                    user_store.c.user_id == User.id,
+                    user_store.c.store_id == product.store_id,
+                    User.role.in_([UserRole.ADMIN, UserRole.MERCHANT])
+                ).all()
+                for user in users_to_notify:
+                    notification = Notification(
+                        user_id=user.id,
+                        message=f"Payment status for inventory entry of product '{product.name}' updated to PAID."
+                    )
+                    db.session.add(notification)
+                    db.session.flush()
+                    socketio.emit('new_notification', {
+                        'id': notification.id,
+                        'message': notification.message,
+                        'created_at': notification.created_at.isoformat()
+                    }, room=f'user_{user.id}')
 
         db.session.commit()
-        logger.info("Payment updated for inventory entry %s by user ID: %s, role: %s",
-                    entry_id, current_user.id, current_user.role.name)
+        logger.info("Payment updated for %d inventory entries by user ID: %s, role: %s",
+                    len(updated_entries), current_user.id, current_user.role.name)
         return jsonify({
             'status': 'success',
-            'message': 'Payment updated successfully',
-            'inventory_entry': InventoryEntrySchema().dump(entry)
+            'message': f'Payment updated for {len(updated_entries)} entries',
+            'inventory_entries': InventoryEntrySchema(many=True).dump(updated_entries)
         }), 200
 
     except Exception as e:
@@ -1066,8 +1090,9 @@ def non_low_stock():
 @jwt_required()
 def get_suppliers(status):
     """
-    Get supplier details by payment status (paid or unpaid) for the current month.
+    Get supplier details by payment status (paid or unpaid).
     Query Parameters:
+        - period (str): weekly, monthly (default: weekly)
         - store_id (int, optional): Filter by store ID
         - search (str, optional): Filter by supplier or product name
     """
@@ -1086,13 +1111,10 @@ def get_suppliers(status):
             logger.error("Invalid status: %s for user ID: %s", status, current_user.id)
             return jsonify({'status': 'error', 'message': 'Invalid status'}), 400
 
+        period = request.args.get('period', 'weekly')
         store_id = request.args.get('store_id', type=int)
         search = request.args.get('search', '')
-
-        # Default to current month
-        start_date = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        next_month = (start_date + timedelta(days=31)).replace(day=1)
-        end_date = next_month - timedelta(seconds=1)
+        start_date, end_date = get_period_dates(period)
 
         store_ids = get_store_ids(current_user.id, current_user.role, store_id)
         if not store_ids:
@@ -1140,8 +1162,8 @@ def get_suppliers(status):
 
         total_amount = sum(float(entry.buying_price * entry.quantity_received) for entry in entries)
         logger.info(
-            "Fetched %d %s supplier entries for user ID: %s, role: %s, store_ids: %s, search: %s, total_amount: %.2f",
-            len(suppliers_data), status, current_user.id, current_user.role.name, store_ids, search, total_amount
+            "Fetched %d %s supplier entries for user ID: %s, role: %s, period: %s, store_ids: %s, search: %s, total_amount: %.2f",
+            len(suppliers_data), status, current_user.id, current_user.role.name, period, store_ids, search, total_amount
         )
         return jsonify({
             'status': 'success',
@@ -1153,18 +1175,6 @@ def get_suppliers(status):
     except Exception as e:
         logger.error("Error in get_suppliers (%s) for user ID: %s: %s", status, identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
-
-@inventory_bp.route('/suppliers/paid', methods=['GET'])
-@jwt_required()
-def get_paid_suppliers():
-    """Get paid supplier details for the current month."""
-    return get_suppliers('paid')
-
-@inventory_bp.route('/suppliers/unpaid', methods=['GET'])
-@jwt_required()
-def get_unpaid_suppliers():
-    """Get unpaid supplier details for the current month."""
-    return get_suppliers('unpaid')
 
 @inventory_bp.route('/suppliers', methods=['GET'])
 @jwt_required()

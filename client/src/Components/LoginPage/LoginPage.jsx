@@ -12,20 +12,24 @@ const LoginPage = () => {
   const [token, setToken] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setIsSubmitting(true);
 
     if (!isLogin) {
       if (password !== confirmPassword) {
         setError('Passwords do not match');
+        setIsSubmitting(false);
         return;
       }
       if (!termsAccepted) {
         setError('You must agree to the Terms & Conditions');
+        setIsSubmitting(false);
         return;
       }
     }
@@ -35,28 +39,22 @@ const LoginPage = () => {
         const response = await api.post('/api/auth/login', { email, password });
         console.log('Login Response:', response.data);
         const { access_token, user } = response.data;
+        
         if (!access_token) {
           throw new Error('No access token received');
         }
+
+        // Check if user is active
+        if (user.status !== 'ACTIVE') {
+          throw new Error('Your account is not active. Please contact your administrator.');
+        }
+
         localStorage.setItem('token', access_token);
         localStorage.setItem('user', JSON.stringify(user));
         console.log('Token stored:', access_token.substring(0, 20) + '...');
-        login(access_token, user, (role) => {
-          console.log('Navigating to role:', role);
-          switch (role) {
-            case ROLES.MERCHANT:
-              navigate(ROUTES.MERCHANT_DASHBOARD, { replace: true });
-              break;
-            case ROLES.ADMIN:
-              navigate(ROUTES.ADMIN_DASHBOARD, { replace: true });
-              break;
-            case ROLES.CLERK:
-              navigate(ROUTES.CLERK_STOCK_ALERTS, { replace: true });
-              break;
-            default:
-              navigate(ROUTES.LOGIN, { replace: true });
-          }
-        });
+        
+        // Call login with the token and user data
+        login(access_token, user);
       } else {
         await api.post('/api/auth/register', { email, password, token });
         setIsLogin(true);
@@ -70,6 +68,8 @@ const LoginPage = () => {
     } catch (err) {
       const message = handleApiError(err, setError);
       console.error('Auth Error:', message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -89,7 +89,7 @@ const LoginPage = () => {
         </button>
         <h2>{isLogin ? 'Log in' : 'Create an account'}</h2>
         <p className="toggle-text">
-          {isLogin ? 'Don’t have an account?' : 'Already have an account?'}{' '}
+          {isLogin ? 'Don\'t have an account?' : 'Already have an account?'}{' '}
           <span onClick={() => setIsLogin(!isLogin)} className="toggle-link">
             {isLogin ? 'Create an account' : 'Log in'}
           </span>
@@ -142,8 +142,12 @@ const LoginPage = () => {
               </label>
             </>
           )}
-          <button type="submit" className="submit-button">
-            {isLogin ? 'Log in' : 'Create account'}
+          <button 
+            type="submit" 
+            className="submit-button"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Processing...' : isLogin ? 'Log in' : 'Create account'}
           </button>
         </form>
         <div className="social-login">

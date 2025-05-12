@@ -1,49 +1,47 @@
 // src/Components/Clerk/SideBar.jsx
-import React, { useContext } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
+import { logout } from '../store/slices/authSlice';
+import './clerk.css';
 
 const SideBar = () => {
-  const navigate = useNavigate();
-  const { logout } = useContext(AuthContext);
+  const dispatch = useDispatch();
   const location = useLocation();
 
+  const isActive = (path) => (location.pathname === path ? 'active' : '');
+
+  const handleLogout = () => {
+    dispatch(logout());
+  };
+
   return (
-    <div className="sidebar w-64 bg-gray-800 text-white h-full">
-      <h3 className="text-xl font-bold p-4">MyDuka</h3> {/* Updated title to "MyDuka" */}
-      <nav className="space-y-2 mt-4"> {/* Added some top margin for spacing */}
-        <a
-          onClick={() => navigate('/clerk/stock-entry')}
-          className={`block p-4 hover:bg-gray-700 cursor-pointer ${
-            location.pathname === '/clerk/stock-entry' ? 'bg-gray-700' : ''
-          }`}
+    <aside className="clerk-sidebar">
+      <h3 className="sidebar-title">MyDuka</h3>
+      <nav className="sidebar-nav">
+        <Link
+          to="/clerk/stock-entry"
+          className={`sidebar-link ${isActive('/clerk/stock-entry')}`}
         >
-          Stock Entry
-        </a>
-        <a
-          onClick={() => navigate('/clerk/stock-alerts')}
-          className={`block p-4 hover:bg-gray-700 cursor-pointer ${
-            location.pathname === '/clerk/stock-alerts' ? 'bg-gray-700' : ''
-          }`}
+          <span className="sidebar-icon">📦</span> Stock Entry
+        </Link>
+        <Link
+          to="/clerk/stock-alerts"
+          className={`sidebar-link ${isActive('/clerk/stock-alerts')}`}
         >
-          Stock Alerts
-        </a>
-        <a
-          onClick={() => navigate('/clerk/activity-log')}
-          className={`block p-4 hover:bg-gray-700 cursor-pointer ${
-            location.pathname === '/clerk/activity-log' ? 'bg-gray-700' : ''
-          }`}
+          <span className="sidebar-icon">⚠️</span> Stock Alerts
+        </Link>
+        <Link
+          to="/clerk/activity-log"
+          className={`sidebar-link ${isActive('/clerk/activity-log')}`}
         >
-          Activity Log
-        </a>
-        <a
-          onClick={logout}
-          className="block p-4 hover:bg-gray-700 cursor-pointer mt-8" // Added some top margin for separation
-        >
-          Logout
-        </a>
+          <span className="sidebar-icon">📝</span> Activity Log
+        </Link>
+        <button onClick={handleLogout} className="sidebar-logout">
+          <span className="sidebar-icon">🚪</span> Logout
+        </button>
       </nav>
-    </div>
+    </aside>
   );
 };
 

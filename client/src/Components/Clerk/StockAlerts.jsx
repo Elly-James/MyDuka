@@ -1,73 +1,103 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+// src/Components/Clerk/StockAlerts.jsx
+import React, { useState, useEffect } from 'react';
+import { api, handleApiError } from '../utils/api';
+import SideBar from './SideBar';
+import NavBar from '../NavBar/NavBar';
+import './clerk.css';
 
-// This displays the low-stock inventory alerts
 const StockAlerts = () => {
-  const [alerts, setAlerts] = useState([]); // State that holds the list of low stock alerts
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  // It fetchs the data when component mounts
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
-        // Gets token from the localStorage for authentication
-        const token = localStorage.getItem('token');
-
-        // Makes a GET request to fetch low stock items
-        const res = await axios.get('http://localhost:5000/api/inventory/low-stock', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        // Sets the retrieved alerts 
-        setAlerts(res.data);
+        setLoading(true);
+        const response = await api.get('/api/inventory/low-stock');
+        
+        // Safely handle the response data
+        const alertsData = response.data?.alerts || response.data || [];
+        setAlerts(Array.isArray(alertsData) ? alertsData : []);
+        
       } catch (err) {
-        console.error('Failed to fetch low stock alerts', err);
+        handleApiError(err, setError);
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchAlerts();
   }, []);
 
-  // The function to handle supply request for specific product
-  const requestSupply = async (productId) => {
+  const handleRequestSupply = async (productId) => {
     try {
-      const token = localStorage.getItem('token');
-
-      // A post request supply for a product
-      await axios.post(
-        'http://localhost:5000/api/inventory/supply-requests',
-        { product_id: productId },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      alert('Supply request sent');
+      setLoading(true);
+      await api.post('/api/supply-requests', { product_id: productId });
+      setSuccess('Supply request submitted successfully');
+      
+      // Refresh alerts
+      const response = await api.get('/api/inventory/low-stock');
+      const refreshedAlerts = response.data?.alerts || response.data || [];
+      setAlerts(Array.isArray(refreshedAlerts) ? refreshedAlerts : []);
+      
     } catch (err) {
-      alert('Failed to send request');
+      handleApiError(err, setError);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // The JSX returned by component
   return (
-    <div>
-      <h2>Stock Alerts</h2>
+    <div className="clerk-container">
+      <SideBar />
+      <div className="main-content">
+        <NavBar />
+        
+        {error && <div className="alert error">{error}</div>}
+        {success && <div className="alert success">{success}</div>}
+        {loading && <div className="loading">Loading stock alerts...</div>}
 
-      {/* If no alerts available, show the message */}
-      {alerts.length === 0 ? (
-        <p>No low stock items.</p>
-      ) : (
-        <ul>
-          {/* This Iterates over each alert item and displays it */}
-          {alerts.map((item) => (
-            <li key={item.id}>
-              {/* Displays the product name and quantity */}
-              <span>{item.product_name}: Low stock ({item.quantity} left)</span>
-
-              {/* The button that requests more supply */}
-              <button onClick={() => requestSupply(item.product_id)}>
-                Request Supply
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+        <h1>Stock Alerts</h1>
+        
+        <div className="card">
+          {!loading && alerts?.length === 0 ? (
+            <p className="no-alerts">No low stock items at this time.</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Current Stock</th>
+                  <th>Minimum Required</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {alerts?.map((alert) => (
+                  <tr key={alert.product_id || alert.id}>
+                    <td>{alert.product_name || alert.name}</td>
+                    <td className={alert.current_stock <= (alert.min_stock_level || 5) ? 'text-danger' : ''}>
+                      {alert.current_stock}
+                    </td>
+                    <td>{alert.min_stock_level || 'N/A'}</td>
+                    <td>
+                      <button
+                        onClick={() => handleRequestSupply(alert.product_id || alert.id)}
+                        className="btn-primary"
+                        disabled={loading}
+                      >
+                        {loading ? 'Processing...' : 'Request Supply'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

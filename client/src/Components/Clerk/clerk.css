@@ -65,3 +65,202 @@
   .mb-6 {
     margin-bottom: 1.5rem;
   }
+
+
+
+  /* src/Components/Clerk/clerk.css */
+.clerk-container {
+    display: flex;
+    min-height: 100vh;
+    background-color: #f5f7fa;
+  }
+  
+  .clerk-sidebar {
+    width: 250px;
+    background-color: #1e293b;
+    color: white;
+    padding: 1rem;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+  
+  .sidebar-title {
+    font-size: 1.5rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #334155;
+  }
+  
+  .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    color: #e2e8f0;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+  
+  .sidebar-link:hover {
+    background-color: #334155;
+  }
+  
+  .sidebar-link.active {
+    background-color: #4f46e5;
+    color: white;
+  }
+  
+  .sidebar-logout {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    color: #e2e8f0;
+    background: none;
+    border: none;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .sidebar-logout:hover {
+    background-color: #334155;
+  }
+  
+  .main-content {
+    flex: 1;
+    padding: 2rem;
+  }
+  
+  .card {
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .table th, .table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  
+  .table th {
+    background-color: #f8fafc;
+    font-weight: 600;
+  }
+  
+  .badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  
+  .badge.success {
+    background-color: #dcfce7;
+    color: #16a34a;
+  }
+  
+  .badge.warning {
+    background-color: #fef9c3;
+    color: #ca8a04;
+  }
+  
+  .badge.danger {
+    background-color: #fee2e2;
+    color: #dc2626;
+  }
+  
+  .btn-primary {
+    background-color: #4f46e5;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .btn-primary:hover {
+    background-color: #4338ca;
+  }
+  
+  .btn-primary:disabled {
+    background-color: #94a3b8;
+    cursor: not-allowed;
+  }
+  
+  .form-group {
+    margin-bottom: 1rem;
+  }
+  
+  .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+  }
+  
+  .form-group input,
+  .form-group select {
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    border: 1px solid #e2e8f0;
+  }
+  
+  .form-group input:focus,
+  .form-group select:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+  }
+  
+  .alert {
+    padding: 1rem;
+    border-radius: 0.375rem;
+    margin-bottom: 1rem;
+  }
+  
+  .alert.error {
+    background-color: #fee2e2;
+    color: #dc2626;
+  }
+  
+  .alert.success {
+    background-color: #dcfce7;
+    color: #16a34a;
+  }
+  
+  .loading {
+    padding: 1rem;
+    text-align: center;
+    color: #64748b;
+  }
+  
+  .text-danger {
+    color: #dc2626;
+  }
+  
+  .no-alerts {
+    text-align: center;
+    padding: 1rem;
+    color: #64748b;
+  }
