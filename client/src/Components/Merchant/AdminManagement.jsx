@@ -466,13 +466,6 @@ const AdminManagement = () => {
                       ) : (
                         <>
                           <button
-                            onClick={() => handleEdit(admin)}
-                            className="button-action px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                            disabled={actionLoading[admin.id]}
-                          >
-                            Edit
-                          </button>
-                          <button
                             onClick={() => handleStatusToggle(admin.id, admin.status)}
                             className="button-action px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                             disabled={actionLoading[admin.id]}
@@ -484,11 +477,20 @@ const AdminManagement = () => {
                               : 'Activate'}
                           </button>
                           <button
+                            onClick={() => handleEdit(admin)}
+                            className="button-action px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            disabled={actionLoading[admin.id]}
+                            title="Edit Admin"
+                          >
+                            {actionLoading[admin.id] ? 'Processing...' : '✏️'}
+                          </button>
+                          <button
                             onClick={() => handleDelete(admin.id)}
                             className="button-action px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700"
                             disabled={actionLoading[admin.id]}
+                            title="Delete Admin"
                           >
-                            {actionLoading[admin.id] ? 'Processing...' : 'Delete'}
+                            {actionLoading[admin.id] ? 'Processing...' : '🗑️'}
                           </button>
                         </>
                       )}

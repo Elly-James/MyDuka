@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { logout } from '../store/slices/authSlice';
 import './merchant.css';
+import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 
 const SideBar = () => {
   const dispatch = useDispatch();
   const location = useLocation();
+  const [collapsed, setCollapsed] = useState(false);
 
   const isActive = (path) => (location.pathname === path ? 'active' : '');
 
@@ -14,37 +16,44 @@ const SideBar = () => {
     dispatch(logout());
   };
 
+  const toggleSidebar = () => {
+    setCollapsed(!collapsed);
+  };
+
   return (
-    <aside className="sidebar">
-      <h3 className="sidebar-title">MyDuka</h3>
+    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+      <button className="sidebar-toggle" onClick={toggleSidebar}>
+        {collapsed ? <FaChevronRight /> : <FaChevronLeft />}
+      </button>
       <nav className="sidebar-nav">
         <Link
           to="/merchant/dashboard"
           className={`sidebar-link ${isActive('/merchant/dashboard')}`}
         >
-          <span className="sidebar-icon">📊</span> Dashboard
+          <span className="sidebar-icon">📊</span> 
+          {!collapsed && "Dashboard"}
         </Link>
         <Link
           to="/merchant/admin-management"
           className={`sidebar-link ${isActive('/merchant/admin-management')}`}
         >
-          <span className="sidebar-icon">👥</span> Admin Management
+          <span className="sidebar-icon">👥</span> 
+          {!collapsed && "Admin Management"}
         </Link>
         <Link
           to="/merchant/store-reports"
           className={`sidebar-link ${isActive('/merchant/store-reports')}`}
         >
-          <span className="sidebar-icon">📋</span> Store Reports
+          <span className="sidebar-icon">📋</span> 
+          {!collapsed && "Store Reports"}
         </Link>
         <Link
           to="/merchant/payment-tracking"
           className={`sidebar-link ${isActive('/merchant/payment-tracking')}`}
         >
-          <span className="sidebar-icon">💰</span> Payment Tracking
+          <span className="sidebar-icon">💰</span> 
+          {!collapsed && "Payment Tracking"}
         </Link>
-        <button onClick={handleLogout} className="sidebar-logout">
-          <span className="sidebar-icon">🚪</span> Logout
-        </button>
       </nav>
     </aside>
   );

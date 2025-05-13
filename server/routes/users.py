@@ -2,11 +2,11 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.orm import selectinload
 from extensions import db, socketio
 from models import User, UserRole, UserStatus, Store, Notification, NotificationType, user_store
 from schemas import UserSchema
-from sqlalchemy import or_, and_
+from sqlalchemy import or_
 from marshmallow import ValidationError
 import logging
 from functools import wraps
@@ -41,9 +41,7 @@ def get_current_user():
 
 def build_user_query(current_user_id, role=None, search=None, store_id=None):
     """Helper function to build common user queries"""
-    query = db.session.query(User).options(
-        selectinload(User.stores)
-    )
+    query = db.session.query(User).options(selectinload(User.stores))
     
     if role:
         query = query.filter(User.role == role)
@@ -74,14 +72,14 @@ def get_users():
     """
     Get users list with filters.
     Query Parameters:
-        - role (str, optional): Filter by role (e.g., 'ADMIN')
+        - role (str, optional): Filter by role (e.g., 'ADMIN', 'CLERK')
         - search (str, optional): Search by name, email, or store name
         - page (int, optional): Page number (default 1)
         - per_page (int, optional): Number of users per page (default 10)
     Responses:
         - 200: List of users with pagination
+        - 400: Invalid role parameter
         - 403: Unauthorized (non-merchant user)
-        - 400: Invalid role
         - 500: Internal server error
     """
     try:
@@ -89,16 +87,13 @@ def get_users():
         current_user_id = identity['id']
         logger.debug(f"Fetching users for user ID: {current_user_id}")
         
-        # Get query parameters
         role = request.args.get('role', '').strip().upper()
         search = request.args.get('search', '').strip()
         page = max(1, request.args.get('page', 1, type=int))
         per_page = max(1, request.args.get('per_page', 10, type=int))
         
-        # Build base query
         query = build_user_query(current_user_id)
         
-        # Apply role filter if specified
         if role:
             try:
                 query = query.filter(User.role == UserRole[role])
@@ -106,7 +101,6 @@ def get_users():
                 logger.error(f"Invalid role parameter: {role}")
                 return jsonify({'status': 'error', 'message': 'Invalid role'}), 400
         
-        # Apply search filter if specified
         if search:
             search_term = f'%{search.lower()}%'
             query = query.filter(or_(
@@ -114,7 +108,6 @@ def get_users():
                 User.email.ilike(search_term)
             ))
         
-        # Get paginated results
         total = query.count()
         pages = (total + per_page - 1) // per_page
         users = query.order_by(User.name.asc()).offset((page - 1) * per_page).limit(per_page).all()
@@ -157,13 +150,11 @@ def get_admins():
         current_user_id = identity['id']
         logger.debug(f"Fetching admins for user ID: {current_user_id}")
         
-        # Get query parameters
         search = request.args.get('search', '').strip()
         store_id = request.args.get('store_id', None, type=int)
         page = max(1, request.args.get('page', 1, type=int))
         per_page = max(1, request.args.get('per_page', 10, type=int))
         
-        # Build query for admins
         query = build_user_query(
             current_user_id,
             role=UserRole.ADMIN,
@@ -171,7 +162,6 @@ def get_admins():
             store_id=store_id
         )
         
-        # Verify store access if store_id is specified
         if store_id:
             has_access = db.session.query(user_store).filter(
                 user_store.c.user_id == current_user_id,
@@ -181,7 +171,6 @@ def get_admins():
                 logger.warning(f"Unauthorized store access: store_id {store_id} by user ID: {current_user_id}")
                 return jsonify({'status': 'error', 'message': 'Unauthorized access to store'}), 403
         
-        # Get paginated results
         total = query.count()
         pages = (total + per_page - 1) // per_page
         admins = query.order_by(User.name.asc()).offset((page - 1) * per_page).limit(per_page).all()
@@ -224,19 +213,16 @@ def get_clerks():
         current_user_role = UserRole[identity['role']]
         logger.debug(f"Fetching clerks for user ID: {current_user_id}")
         
-        # Get query parameters
         search = request.args.get('search', '').strip()
         page = max(1, request.args.get('page', 1, type=int))
         per_page = max(1, request.args.get('per_page', 10, type=int))
         
-        # Build query for clerks
         query = build_user_query(
             current_user_id,
             role=UserRole.CLERK,
             search=search
         )
         
-        # For merchants, only show clerks from their stores
         if current_user_role == UserRole.MERCHANT:
             query = query.join(user_store).filter(
                 user_store.c.store_id.in_(
@@ -246,7 +232,6 @@ def get_clerks():
                 )
             )
         
-        # Get paginated results
         total = query.count()
         pages = (total + per_page - 1) // per_page
         clerks = query.order_by(User.name.asc()).offset((page - 1) * per_page).limit(per_page).all()
@@ -273,8 +258,8 @@ def get_clerks():
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
 def update_user(user_id):
     """
-    Update user details (name, email, stores).
-    Now accessible to both MERCHANT and ADMIN roles.
+    Update user details (name, email, stores) for clerks or admins.
+    Merchants can update both clerks and admins.
     Body:
         - name (str, optional): New name
         - email (str, optional): New email
@@ -282,8 +267,8 @@ def update_user(user_id):
     Responses:
         - 200: User updated successfully
         - 400: Validation error or missing fields
-        - 403: Unauthorized (merchant updating non-clerk or invalid store)
-        - 404: User not found
+        - 403: Unauthorized (invalid store access)
+        - 404: User or store not found
         - 409: Email already in use
         - 500: Internal server error
     """
@@ -294,34 +279,29 @@ def update_user(user_id):
         data = request.get_json() or {}
         logger.info(f"Updating user ID {user_id} by user ID: {current_user_id}")
         
-        # Validate input
         if not data or not any(k in data for k in ('name', 'email', 'store_ids')):
             logger.error(f"Missing required fields in update request by user ID: {current_user_id}")
             return jsonify({'status': 'error', 'message': 'Name, email, or store_ids required'}), 400
 
-        # Get user to update
         user = db.session.query(User).options(selectinload(User.stores)).get(user_id)
         if not user:
             logger.warning(f"User ID {user_id} not found for update by user ID: {current_user_id}")
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
 
-        # Authorization check
-        if current_user_role == UserRole.MERCHANT:
-            # Merchants can only update their own clerks
-            if user.role != UserRole.CLERK:
-                logger.warning(f"Merchant attempted to update non-clerk user ID {user_id}")
-                return jsonify({'status': 'error', 'message': 'Can only update clerks'}), 403
-            
-            # Verify merchant has access to all stores being assigned
-            if 'store_ids' in data:
-                current_user = get_current_user()
-                if not current_user:
-                    logger.error(f"Current user ID {current_user_id} not found")
-                    return jsonify({'status': 'error', 'message': 'Current user not found'}), 404
-                merchant_store_ids = [s.id for s in current_user.stores]
-                if not all(sid in merchant_store_ids for sid in data['store_ids']):
-                    logger.warning(f"Unauthorized store access by user ID: {current_user_id}")
-                    return jsonify({'status': 'error', 'message': 'Unauthorized store access'}), 403
+        if user.role not in [UserRole.CLERK, UserRole.ADMIN]:
+            logger.warning(f"Attempted to update invalid user role {user.role.name} for user ID {user_id} by user ID: {current_user_id}")
+            return jsonify({'status': 'error', 'message': 'Can only update clerks or admins'}), 403
+
+        current_user = get_current_user()
+        if not current_user:
+            logger.error(f"Current user ID {current_user_id} not found")
+            return jsonify({'status': 'error', 'message': 'Current user not found'}), 404
+
+        if current_user_role == UserRole.MERCHANT and 'store_ids' in data:
+            merchant_store_ids = [s.id for s in current_user.stores]
+            if not all(sid in merchant_store_ids for sid in data['store_ids']):
+                logger.warning(f"Unauthorized store access by user ID: {current_user_id}")
+                return jsonify({'status': 'error', 'message': 'Unauthorized store access'}), 403
 
         try:
             with db.session.begin_nested():
@@ -349,10 +329,6 @@ def update_user(user_id):
                 user.updated_at = datetime.utcnow()
                 db.session.flush()
                 
-                current_user = get_current_user()
-                if not current_user:
-                    logger.error(f"Current user ID {current_user_id} not found")
-                    return jsonify({'status': 'error', 'message': 'Current user not found'}), 404
                 notification = Notification(
                     user_id=user_id,
                     message=f"Your account details have been updated by {current_user.name}.",
@@ -378,7 +354,7 @@ def update_user(user_id):
             logger.info(f"User ID {user_id} updated by user ID: {current_user_id}")
             return jsonify({
                 'status': 'success',
-                'message': 'User updated successfully',
+                'message': f"{user.role.name.title()} updated successfully",
                 'user': user_data
             }), 200
 
@@ -403,14 +379,14 @@ def update_user(user_id):
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
 def update_user_status(user_id):
     """
-    Update user status (activate/deactivate).
-    Now accessible to both MERCHANT and ADMIN roles.
+    Update user status (activate/deactivate) for clerks or admins.
+    Merchants can update both clerks and admins.
     Body:
         - status (str): New status ('ACTIVE', 'INACTIVE')
     Responses:
         - 200: Status updated successfully
         - 400: Invalid status or missing fields
-        - 403: Unauthorized (merchant updating non-clerk or unauthorized access)
+        - 403: Unauthorized (invalid store access)
         - 404: User not found
         - 500: Internal server error
     """
@@ -436,14 +412,11 @@ def update_user_status(user_id):
             logger.warning(f"User ID {user_id} not found for status update by user ID: {current_user_id}")
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
 
-        # Authorization check
+        if user.role not in [UserRole.CLERK, UserRole.ADMIN]:
+            logger.warning(f"Attempted to update status of invalid user role {user.role.name} for user ID {user_id} by user ID: {current_user_id}")
+            return jsonify({'status': 'error', 'message': 'Can only update clerks or admins'}), 403
+
         if current_user_role == UserRole.MERCHANT:
-            # Merchants can only update their own clerks
-            if user.role != UserRole.CLERK:
-                logger.warning(f"Merchant attempted to update status of non-clerk user ID {user_id}")
-                return jsonify({'status': 'error', 'message': 'Can only update clerks'}), 403
-            
-            # Verify merchant has access to at least one of the user's stores
             current_user = get_current_user()
             if not current_user:
                 logger.error(f"Current user ID {current_user_id} not found")
@@ -493,7 +466,7 @@ def update_user_status(user_id):
             logger.info(f"User ID {user_id} status updated to {new_status.name} by user ID: {current_user_id}")
             return jsonify({
                 'status': 'success',
-                'message': f"User status updated to {new_status.name.lower()}",
+                'message': f"{user.role.name.title()} status updated to {new_status.name.lower()}",
                 'user': user_data
             }), 200
 
@@ -511,11 +484,11 @@ def update_user_status(user_id):
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
 def delete_user(user_id):
     """
-    Delete a user (admin or clerk).
-    Now accessible to both MERCHANT and ADMIN roles.
+    Delete a user (clerk or admin).
+    Merchants can delete both clerks and admins.
     Responses:
         - 200: User deleted successfully
-        - 403: Unauthorized (merchant deleting non-clerk or unauthorized access)
+        - 403: Unauthorized (invalid store access)
         - 404: User not found
         - 500: Internal server error
     """
@@ -530,14 +503,11 @@ def delete_user(user_id):
             logger.warning(f"User ID {user_id} not found for deletion by user ID: {current_user_id}")
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
 
-        # Authorization check
+        if user.role not in [UserRole.CLERK, UserRole.ADMIN]:
+            logger.warning(f"Attempted to delete invalid user role {user.role.name} for user ID {user_id} by user ID: {current_user_id}")
+            return jsonify({'status': 'error', 'message': 'Can only delete clerks or admins'}), 403
+
         if current_user_role == UserRole.MERCHANT:
-            # Merchants can only delete their own clerks
-            if user.role != UserRole.CLERK:
-                logger.warning(f"Merchant attempted to delete non-clerk user ID {user_id}")
-                return jsonify({'status': 'error', 'message': 'Can only delete clerks'}), 403
-            
-            # Verify merchant has access to at least one of the user's stores
             current_user = get_current_user()
             if not current_user:
                 logger.error(f"Current user ID {current_user_id} not found")
