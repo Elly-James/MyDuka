@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { api, handleApiError, ROUTES } from '../utils/api';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { api, handleApiError } from '../utils/api';
 import './login.css';
 
 const ResetPassword = () => {
@@ -51,7 +51,7 @@ const ResetPassword = () => {
             <input
               type="password"
               value={confirmPassword}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Confirm Password"
               required
             />
@@ -63,9 +63,6 @@ const ResetPassword = () => {
         </form>
         {message && <p className="success">{message}</p>}
         {error && <p className="error">{error}</p>}
-        <p className="toggle-text">
-          Back to <Link to={ROUTES.LOGIN} className="toggle-link">Login</Link>
-        </p>
       </div>
     </div>
   );

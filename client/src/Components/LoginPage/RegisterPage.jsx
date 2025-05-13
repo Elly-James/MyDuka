@@ -18,7 +18,6 @@ const RegisterPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Extract token and email from URL
   useEffect(() => {
     const query = new URLSearchParams(location.search);
     const urlToken = query.get('token');
@@ -33,7 +32,6 @@ const RegisterPage = () => {
     setToken(urlToken);
     setFormData(prev => ({ ...prev, email: urlEmail }));
 
-    // Verify the token
     const verifyToken = async () => {
       try {
         const response = await api.get(`/api/auth/register?token=${urlToken}&email=${urlEmail}`);
@@ -46,7 +44,6 @@ const RegisterPage = () => {
       } catch (err) {
         let errorMessage = 'Failed to verify invitation';
         
-        // Handle specific error codes
         if (err.response?.data?.code) {
           switch(err.response.data.code) {
             case 'EXPIRED_TOKEN':
@@ -78,7 +75,6 @@ const RegisterPage = () => {
     e.preventDefault();
     setError('');
 
-    // Validate form
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -105,11 +101,9 @@ const RegisterPage = () => {
       });
 
       if (response.data.status === 'success') {
-        // Store tokens and redirect
         localStorage.setItem('access_token', response.data.access_token);
         localStorage.setItem('refresh_token', response.data.refresh_token);
         
-        // Redirect to appropriate dashboard
         navigate(response.data.redirect_to || `/${response.data.user?.role?.toLowerCase()}-dashboard`);
       } else {
         setError(response.data.message || 'Registration failed');
@@ -156,9 +150,6 @@ const RegisterPage = () => {
         <div className="form-section centered">
           <h2>Registration Error</h2>
           <p className="error">{error}</p>
-          <p className="toggle-text">
-            <Link to={ROUTES.LOGIN} className="toggle-link">Back to Login</Link>
-          </p>
         </div>
       </div>
     );
@@ -226,9 +217,6 @@ const RegisterPage = () => {
             Complete Registration
           </button>
         </form>
-        <p className="toggle-text">
-          Already have an account? <Link to={ROUTES.LOGIN} className="toggle-link">Login</Link>
-        </p>
       </div>
     </div>
   );

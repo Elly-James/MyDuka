@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { api, handleApiError, ROUTES } from '../utils/api';
+import { api, handleApiError } from '../utils/api';
 import './login.css';
 
 const ForgotPassword = () => {
@@ -40,9 +39,6 @@ const ForgotPassword = () => {
         </form>
         {message && <p className="success">{message}</p>}
         {error && <p className="error">{error}</p>}
-        <p className="toggle-text">
-          Back to <Link to={ROUTES.LOGIN} className="toggle-link">Login</Link>
-        </p>
       </div>
     </div>
   );

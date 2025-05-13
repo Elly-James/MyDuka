@@ -3,8 +3,9 @@ import { api, handleApiError } from '../utils/api';
 import useSocket from '../hooks/useSocket';
 import SideBar from './SideBar';
 import NavBar from '../NavBar/NavBar';
-import './admin.css';
+import { FaEdit, FaTrash } from 'react-icons/fa';
 import debounce from 'lodash/debounce';
+import './admin.css';
 
 const ClerkManagement = () => {
   const [clerks, setClerks] = useState([]);
@@ -140,7 +141,7 @@ const ClerkManagement = () => {
       setShowInviteModal(false);
       setSuccess('Invitation sent successfully');
       setTimeout(() => setSuccess(''), 4000);
-      fetchClerks(); // Refresh the list after inviting
+      fetchClerks();
     } catch (err) {
       handleApiError(err, setError);
     } finally {
@@ -263,17 +264,17 @@ const ClerkManagement = () => {
 
         <div className="card bg-white p-6 rounded-lg shadow">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="card-title text-2xl font-bold">Clerk Management</h2>
+            <h2 className="card-title text-2xl font-bold text-gray-800">Clerk Management</h2>
             <div className="flex gap-4">
               <input
                 type="text"
                 placeholder="Search clerks by name, email, or store..."
                 onChange={(e) => debouncedSearch(e.target.value)}
-                className="p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
               <button
                 onClick={() => setShowInviteModal(true)}
-                className="button px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                className="button px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
               >
                 + Invite Clerk
               </button>
@@ -283,7 +284,7 @@ const ClerkManagement = () => {
           {showInviteModal && (
             <div className="modal-overlay fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
               <div className="modal-content bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-                <h3 className="modal-title text-xl font-bold mb-4">Invite New Clerk</h3>
+                <h3 className="modal-title text-xl font-bold mb-4 text-gray-800">Invite New Clerk</h3>
                 <form onSubmit={handleInvite} className="invite-form space-y-4">
                   <div className="form-group">
                     <label htmlFor="name" className="form-label text-gray-700">
@@ -296,7 +297,7 @@ const ClerkManagement = () => {
                       onChange={(e) =>
                         setInviteForm({ ...inviteForm, name: e.target.value })
                       }
-                      className="form-input p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="form-input p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-purple-500"
                       placeholder="Enter clerk name"
                       required
                     />
@@ -312,7 +313,7 @@ const ClerkManagement = () => {
                       onChange={(e) =>
                         setInviteForm({ ...inviteForm, email: e.target.value })
                       }
-                      className="form-input p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="form-input p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-purple-500"
                       placeholder="Enter clerk email"
                       required
                     />
@@ -327,7 +328,7 @@ const ClerkManagement = () => {
                       onChange={(e) =>
                         setInviteForm({ ...inviteForm, store_id: e.target.value })
                       }
-                      className="form-input p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="form-input p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-purple-500"
                       required
                     >
                       <option value="">Select a store</option>
@@ -341,7 +342,7 @@ const ClerkManagement = () => {
                   <div className="modal-actions flex gap-4">
                     <button
                       type="submit"
-                      className="button px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                      className="button px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
                       disabled={actionLoading.invite}
                     >
                       {actionLoading.invite ? 'Sending...' : 'Send Invite'}
@@ -362,145 +363,149 @@ const ClerkManagement = () => {
             </div>
           )}
 
-          <table className="table w-full mb-6 border-collapse">
-            <thead>
-              <tr className="bg-gray-200">
-                <th className="p-3 text-left">Name</th>
-                <th className="p-3 text-left">Email</th>
-                <th className="p-3 text-left">Stores</th>
-                <th className="p-3 text-left">Status</th>
-                <th className="p-3 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clerks.length > 0 ? (
-                clerks.map((clerk) => (
-                  <tr key={clerk.id} className="border-b">
-                    <td className="p-3">
-                      {editForm && editForm.id === clerk.id ? (
-                        <input
-                          type="text"
-                          value={editForm.name}
-                          onChange={(e) =>
-                            setEditForm({ ...editForm, name: e.target.value })
-                          }
-                          className="p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          required
-                        />
-                      ) : (
-                        clerk.name
-                      )}
-                    </td>
-                    <td className="p-3">
-                      {editForm && editForm.id === clerk.id ? (
-                        <input
-                          type="email"
-                          value={editForm.email}
-                          onChange={(e) =>
-                            setEditForm({ ...editForm, email: e.target.value })
-                          }
-                          className="p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          required
-                        />
-                      ) : (
-                        clerk.email
-                      )}
-                    </td>
-                    <td className="p-3">
-                      {editForm && editForm.id === clerk.id ? (
-                        <select
-                          multiple
-                          value={editForm.store_ids}
-                          onChange={(e) =>
-                            setEditForm({
-                              ...editForm,
-                              store_ids: Array.from(
-                                e.target.selectedOptions,
-                                (option) => parseInt(option.value)
-                              ),
-                            })
-                          }
-                          className="p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          <div className="overflow-x-auto">
+            <table className="table w-full mb-6 border-collapse">
+              <thead>
+                <tr className="bg-gray-200">
+                  <th className="p-3 text-left text-gray-700">Name</th>
+                  <th className="p-3 text-left text-gray-700">Email</th>
+                  <th className="p-3 text-left text-gray-700">Stores</th>
+                  <th className="p-3 text-left text-gray-700">Status</th>
+                  <th className="p-3 text-left text-gray-700">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clerks.length > 0 ? (
+                  clerks.map((clerk) => (
+                    <tr key={clerk.id} className="border-b hover:bg-gray-50">
+                      <td className="p-3">
+                        {editForm && editForm.id === clerk.id ? (
+                          <input
+                            type="text"
+                            value={editForm.name}
+                            onChange={(e) =>
+                              setEditForm({ ...editForm, name: e.target.value })
+                            }
+                            className="p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            required
+                          />
+                        ) : (
+                          clerk.name
+                        )}
+                      </td>
+                      <td className="p-3">
+                        {editForm && editForm.id === clerk.id ? (
+                          <input
+                            type="email"
+                            value={editForm.email}
+                            onChange={(e) =>
+                              setEditForm({ ...editForm, email: e.target.value })
+                            }
+                            className="p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            required
+                          />
+                        ) : (
+                          clerk.email
+                        )}
+                      </td>
+                      <td className="p-3">
+                        {editForm && editForm.id === clerk.id ? (
+                          <select
+                            multiple
+                            value={editForm.store_ids}
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                store_ids: Array.from(
+                                  e.target.selectedOptions,
+                                  (option) => parseInt(option.value)
+                                ),
+                              })
+                            }
+                            className="p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          >
+                            {stores.map((store) => (
+                              <option key={store.id} value={store.id}>
+                                {store.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          clerk.stores?.map((store) => store.name).join(', ') || 'N/A'
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <span
+                          className={`status-badge px-2 py-1 rounded-full text-sm ${
+                            clerk.status === 'ACTIVE'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}
                         >
-                          {stores.map((store) => (
-                            <option key={store.id} value={store.id}>
-                              {store.name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        clerk.stores?.map((store) => store.name).join(', ') || 'N/A'
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <span
-                        className={`status-badge px-2 py-1 rounded-full text-sm ${
-                          clerk.status === 'ACTIVE'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {clerk.status}
-                      </span>
-                    </td>
-                    <td className="p-3 space-x-2">
-                      {editForm && editForm.id === clerk.id ? (
-                        <>
-                          <button
-                            onClick={handleEditSubmit}
-                            className="button-action px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                            disabled={actionLoading[clerk.id]}
-                          >
-                            {actionLoading[clerk.id] ? 'Saving...' : 'Save'}
-                          </button>
-                          <button
-                            onClick={() => setEditForm(null)}
-                            className="button-action px-3 py-1 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => handleEdit(clerk)}
-                            className="button-action px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                            disabled={actionLoading[clerk.id]}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleStatusToggle(clerk.id, clerk.status)}
-                            className="button-action px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                            disabled={actionLoading[clerk.id]}
-                          >
-                            {actionLoading[clerk.id]
-                              ? 'Processing...'
-                              : clerk.status === 'ACTIVE'
-                              ? 'Deactivate'
-                              : 'Activate'}
-                          </button>
-                          <button
-                            onClick={() => handleDelete(clerk.id)}
-                            className="button-action px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                            disabled={actionLoading[clerk.id]}
-                          >
-                            {actionLoading[clerk.id] ? 'Processing...' : 'Delete'}
-                          </button>
-                        </>
-                      )}
+                          {clerk.status}
+                        </span>
+                      </td>
+                      <td className="p-3 flex items-center gap-2">
+                        {editForm && editForm.id === clerk.id ? (
+                          <>
+                            <button
+                              onClick={handleEditSubmit}
+                              className="button-action px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                              disabled={actionLoading[clerk.id]}
+                            >
+                              {actionLoading[clerk.id] ? 'Saving...' : 'Save'}
+                            </button>
+                            <button
+                              onClick={() => setEditForm(null)}
+                              className="button-action px-3 py-1 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleEdit(clerk)}
+                              className="text-blue-600 hover:text-blue-800"
+                              disabled={actionLoading[clerk.id]}
+                              title="Edit Clerk"
+                            >
+                              <FaEdit size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(clerk.id)}
+                              className="text-red-600 hover:text-red-800"
+                              disabled={actionLoading[clerk.id]}
+                              title="Delete Clerk"
+                            >
+                              <FaTrash size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleStatusToggle(clerk.id, clerk.status)}
+                              className="button-action px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                              disabled={actionLoading[clerk.id]}
+                            >
+                              {actionLoading[clerk.id]
+                                ? 'Processing...'
+                                : clerk.status === 'ACTIVE'
+                                ? 'Deactivate'
+                                : 'Activate'}
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5" className="text-center text-gray-500 p-3">
+                      No clerks found
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="5" className="text-center text-gray-500 p-3">
-                    No clerks found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
 
           <div className="flex justify-between items-center mt-4">
             <button
@@ -516,7 +521,7 @@ const ClerkManagement = () => {
                   key={i + 1}
                   className={`pagination-button px-3 py-1 rounded-lg ${
                     currentPage === i + 1
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-purple-600 text-white'
                       : 'bg-gray-200 text-gray-700'
                   }`}
                   onClick={() => paginate(i + 1)}

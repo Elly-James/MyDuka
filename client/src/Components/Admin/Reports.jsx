@@ -59,15 +59,11 @@ const Reports = () => {
       setLoading(true);
       setError('');
       try {
-        // Fetch stores
         const storesResponse = await api.get('/api/stores');
         setStores(storesResponse.data.stores || []);
-
-        // Fetch dashboard summary
         const sumRes = await api.get(
           `/api/dashboard/summary?period=${period}${selectedStore ? `&store_id=${selectedStore}` : ''}`
         );
-        console.log('Dashboard Summary Response:', sumRes.data); // Debug log
         const sum = sumRes.data.data || {
           total_sales: 0,
           total_spoilage_value: 0,
@@ -84,7 +80,6 @@ const Reports = () => {
           unpaid_suppliers_count: sum.unpaid_suppliers_count,
           unpaid_suppliers_amount: sum.unpaid_suppliers_amount,
         });
-
         setSuccess('Data loaded successfully');
       } catch (err) {
         handleApiError(err, setError);
@@ -176,8 +171,8 @@ const Reports = () => {
       {
         label: 'Sales (KSh)',
         data: salesReport?.chart_data?.datasets?.[0]?.data || getChartLabels().map(() => 0),
-        borderColor: '#6366f1',
-        backgroundColor: 'rgba(99, 102, 241, 0.2)',
+        borderColor: '#9b59b6',
+        backgroundColor: 'rgba(155, 89, 182, 0.2)',
         tension: 0.4,
         fill: true,
       },
@@ -240,7 +235,7 @@ const Reports = () => {
   return (
     <div className="admin-container flex min-h-screen bg-gray-100">
       <SideBar />
-      <div className="main-content flex-1 p-6">
+      <div className="main-content flex-1 p-6 max-w-full w-full">
         <NavBar />
         {error || reduxError ? (
           <p className="text-red-500 mb-4 font-bold bg-red-100 p-3 rounded">{error || reduxError}</p>
@@ -253,17 +248,17 @@ const Reports = () => {
         )}
 
         <div className="dashboard-header mb-6">
-          <h1 className="dashboard-title text-3xl font-bold">Reports</h1>
+          <h1 className="dashboard-title text-3xl font-bold text-gray-800">Reports</h1>
           <p className="dashboard-subtitle text-gray-600">Detailed performance metrics for your stores.</p>
         </div>
 
-        <div className="card bg-white p-6 rounded-lg shadow">
+        <div className="card bg-white p-6 rounded-lg shadow w-full">
           <div className="flex justify-between mb-6">
             <div className="flex gap-4">
               <select
                 value={selectedStore}
                 onChange={(e) => setSelectedStore(e.target.value)}
-                className="p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
                 <option value="">All Stores</option>
                 {stores.map((store) => (
@@ -274,7 +269,7 @@ const Reports = () => {
               </select>
               <button
                 className={`button px-4 py-2 rounded-lg ${
-                  period === 'weekly' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'
+                  period === 'weekly' ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700'
                 }`}
                 onClick={() => setPeriod('weekly')}
               >
@@ -282,7 +277,7 @@ const Reports = () => {
               </button>
               <button
                 className={`button px-4 py-2 rounded-lg ${
-                  period === 'monthly' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'
+                  period === 'monthly' ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700'
                 }`}
                 onClick={() => setPeriod('monthly')}
               >
@@ -309,8 +304,8 @@ const Reports = () => {
             <table className="table w-full border-collapse">
               <thead>
                 <tr className="bg-gray-200">
-                  <th className="p-3 text-left">Metric</th>
-                  <th className="p-3 text-left">Value</th>
+                  <th className="p-3 text-left text-gray-700">Metric</th>
+                  <th className="p-3 text-left text-gray-700">Value</th>
                 </tr>
               </thead>
               <tbody>
@@ -345,10 +340,10 @@ const Reports = () => {
             <table className="table w-full border-collapse">
               <thead>
                 <tr className="bg-gray-200">
-                  <th className="p-3 text-left">Product</th>
-                  <th className="p-3 text-left">Units Sold</th>
-                  <th className="p-3 text-left">Revenue (KSh)</th>
-                  <th className="p-3 text-left">Growth</th>
+                  <th className="p-3 text-left text-gray-700">Product</th>
+                  <th className="p-3 text-left text-gray-700">Units Sold</th>
+                  <th className="p-3 text-left text-gray-700">Revenue (KSh)</th>
+                  <th className="p-3 text-left text-gray-700">Growth</th>
                 </tr>
               </thead>
               <tbody>
