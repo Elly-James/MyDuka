@@ -20,10 +20,12 @@ const NavBar = () => {
 
         {/* User Info and Actions */}
         <div className="navbar-user">
-          <div className="user-avatar">
-            {user?.name?.charAt(0) || 'U'}
+          <div className="user-info">
+            <div className="user-avatar">
+              {user?.name?.charAt(0) || 'U'}
+            </div>
+            <span className="user-name">{user?.name || 'User'}</span>
           </div>
-          <span className="user-name">{user?.name || 'User'}</span>
           <button onClick={logout} className="logout-button">
             Logout
           </button>
