@@ -9,8 +9,8 @@ import debounce from 'lodash/debounce';
 const ClerkManagement = () => {
   const [clerks, setClerks] = useState([]);
   const [stores, setStores] = useState([]);
-  const [inviteForm, setInviteForm] = useState({ name: '', email: '', store_ids: [] });
-  const [editForm, setEditForm] = useState(null); // { id, name, email, store_ids }
+  const [inviteForm, setInviteForm] = useState({ name: '', email: '', store_id: '' });
+  const [editForm, setEditForm] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,41 +30,28 @@ const ClerkManagement = () => {
       const response = await api.get(
         `/api/users/clerks?search=${encodeURIComponent(searchTerm)}&page=${currentPage}&per_page=${clerksPerPage}`
       );
-      console.log('Clerks response:', response.data); // Debug log
       setClerks(response.data.clerks || []);
       setTotalPages(response.data.pages || 1);
     } catch (err) {
-      console.error('Error fetching clerks:', err); // Debug log
       handleApiError(err, setError);
     } finally {
       setLoading(false);
     }
   }, [currentPage, searchTerm]);
+
+  const fetchStores = useCallback(async () => {
+    try {
+      const response = await api.get('/api/stores');
+      setStores(response.data.stores || []);
+    } catch (err) {
+      handleApiError(err, setError);
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [clerksResponse, storesResponse] = await Promise.all([
-        api.get(
-          `/api/users/clerks?search=${encodeURIComponent(searchTerm)}&page=${currentPage}&per_page=${clerksPerPage}`
-        ),
-        api.get('/api/stores'),
-      ]);
-      console.log('Clerks response:', clerksResponse.data); // Debug log
-      console.log('Stores response:', storesResponse.data); // Debug log
-      setClerks(clerksResponse.data.clerks || []);
-      setTotalPages(clerksResponse.data.pages || 1);
-      setStores(storesResponse.data.stores || []);
-    } catch (err) {
-      console.error('Error fetching data:', err); // Debug log
-      handleApiError(err, setError);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentPage, searchTerm]);
+    await Promise.all([fetchClerks(), fetchStores()]);
+  }, [fetchClerks, fetchStores]);
 
-  // Debounced search handler
   const debouncedSearch = useMemo(
     () => debounce((value) => {
       setSearchTerm(value);
@@ -78,21 +65,23 @@ const ClerkManagement = () => {
 
     if (socket) {
       socket.on('user_updated', (updatedUser) => {
-        setClerks((prev) =>
-          prev.map((clerk) =>
-            clerk.id === updatedUser.id
-              ? {
-                  ...clerk,
-                  ...updatedUser,
-                  stores: updatedUser.stores || clerk.stores,
-                  role: updatedUser.role,
-                  status: updatedUser.status,
-                }
-              : clerk
-          )
-        );
-        setSuccess('Clerk updated successfully');
-        setTimeout(() => setSuccess(''), 4000);
+        if (updatedUser.role === 'CLERK') {
+          setClerks((prev) =>
+            prev.map((clerk) =>
+              clerk.id === updatedUser.id
+                ? {
+                    ...clerk,
+                    ...updatedUser,
+                    stores: updatedUser.stores || clerk.stores,
+                    role: updatedUser.role,
+                    status: updatedUser.status,
+                  }
+                : clerk
+            )
+          );
+          setSuccess('Clerk updated successfully');
+          setTimeout(() => setSuccess(''), 4000);
+        }
       });
 
       socket.on('user_deleted', ({ id }) => {
@@ -102,8 +91,10 @@ const ClerkManagement = () => {
       });
 
       socket.on('user_invited', (invitedUser) => {
-        setSuccess(`Invitation sent to ${invitedUser.email}`);
-        setTimeout(() => setSuccess(''), 4000);
+        if (invitedUser.role === 'CLERK') {
+          setSuccess(`Invitation sent to ${invitedUser.email}`);
+          setTimeout(() => setSuccess(''), 4000);
+        }
       });
 
       socket.on('user_created', (newUser) => {
@@ -143,14 +134,14 @@ const ClerkManagement = () => {
         name: inviteForm.name.trim(),
         email: inviteForm.email.trim().toLowerCase(),
         role: 'CLERK',
-        store_ids: inviteForm.store_ids.map(id => parseInt(id)),
+        store_id: parseInt(inviteForm.store_id),
       });
-      setInviteForm({ name: '', email: '', store_ids: [] });
+      setInviteForm({ name: '', email: '', store_id: '' });
       setShowInviteModal(false);
       setSuccess('Invitation sent successfully');
       setTimeout(() => setSuccess(''), 4000);
+      fetchClerks(); // Refresh the list after inviting
     } catch (err) {
-      console.error('Error sending invite:', err); // Debug log
       handleApiError(err, setError);
     } finally {
       setActionLoading((prev) => ({ ...prev, invite: false }));
@@ -195,7 +186,6 @@ const ClerkManagement = () => {
       setSuccess('Clerk updated successfully');
       setTimeout(() => setSuccess(''), 4000);
     } catch (err) {
-      console.error('Error updating clerk:', err); // Debug log
       handleApiError(err, setError);
     } finally {
       setActionLoading((prev) => ({ ...prev, [editForm.id]: false }));
@@ -226,7 +216,6 @@ const ClerkManagement = () => {
       setSuccess(`Clerk status updated to ${newStatus.toLowerCase()}`);
       setTimeout(() => setSuccess(''), 4000);
     } catch (err) {
-      console.error('Error toggling status:', err); // Debug log
       handleApiError(err, setError);
     } finally {
       setActionLoading((prev) => ({ ...prev, [id]: false }));
@@ -244,7 +233,6 @@ const ClerkManagement = () => {
         setSuccess('Clerk deleted successfully');
         setTimeout(() => setSuccess(''), 4000);
       } catch (err) {
-        console.error('Error deleting clerk:', err); // Debug log
         handleApiError(err, setError);
       } finally {
         setActionLoading((prev) => ({ ...prev, [id]: false }));
@@ -274,23 +262,22 @@ const ClerkManagement = () => {
         )}
 
         <div className="card bg-white p-6 rounded-lg shadow">
-          <div className="header">
-            <h1 className="card-title text-2xl font-bold">Clerk Management</h1>
-            <button 
-              onClick={() => setShowInviteModal(true)}
-              className="btn-primary px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-            >
-              + Invite Clerk
-            </button>
-          </div>
-
-          <div className="flex justify-between items-center mb-4 mt-4">
-            <input
-              type="text"
-              placeholder="Search clerks by name, email, or store..."
-              onChange={(e) => debouncedSearch(e.target.value)}
-              className="p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="card-title text-2xl font-bold">Clerk Management</h2>
+            <div className="flex gap-4">
+              <input
+                type="text"
+                placeholder="Search clerks by name, email, or store..."
+                onChange={(e) => debouncedSearch(e.target.value)}
+                className="p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="button px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+              >
+                + Invite Clerk
+              </button>
+            </div>
           </div>
 
           {showInviteModal && (
@@ -331,34 +318,24 @@ const ClerkManagement = () => {
                     />
                   </div>
                   <div className="form-group">
-                    <label htmlFor="store_ids" className="form-label text-gray-700">
-                      Stores
+                    <label htmlFor="store_id" className="form-label text-gray-700">
+                      Store
                     </label>
                     <select
-                      id="store_ids"
-                      multiple
-                      value={inviteForm.store_ids}
+                      id="store_id"
+                      value={inviteForm.store_id}
                       onChange={(e) =>
-                        setInviteForm({
-                          ...inviteForm,
-                          store_ids: Array.from(
-                            e.target.selectedOptions,
-                            (option) => parseInt(option.value)
-                          ),
-                        })
+                        setInviteForm({ ...inviteForm, store_id: e.target.value })
                       }
-                      className="form-input p-2 border border-gray-300 rounded-lg w-full max-h-40 overflow-y-auto focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="form-input p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       required
                     >
-                      {stores.length > 0 ? (
-                        stores.map((store) => (
-                          <option key={store.id} value={store.id}>
-                            {store.name}
-                          </option>
-                        ))
-                      ) : (
-                        <option disabled>No stores available</option>
-                      )}
+                      <option value="">Select a store</option>
+                      {stores.map((store) => (
+                        <option key={store.id} value={store.id}>
+                          {store.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="modal-actions flex gap-4">
@@ -372,7 +349,7 @@ const ClerkManagement = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        setInviteForm({ name: '', email: '', store_ids: [] });
+                        setInviteForm({ name: '', email: '', store_id: '' });
                         setShowInviteModal(false);
                       }}
                       className="button px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
@@ -443,7 +420,7 @@ const ClerkManagement = () => {
                               ),
                             })
                           }
-                          className="p-2 border border-gray-300 rounded-lg w-full max-h-40 overflow-y-auto focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          className="p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         >
                           {stores.map((store) => (
                             <option key={store.id} value={store.id}>

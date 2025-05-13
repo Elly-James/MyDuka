@@ -83,8 +83,8 @@ def create_app(config_name='development'):
     app.register_blueprint(inventory_bp, url_prefix='/api/inventory')
     app.register_blueprint(users_bp, url_prefix='/api/users')
     app.register_blueprint(reports_bp, url_prefix='/api/reports')
-    app.register_blueprint(stores_bp)
-    app.register_blueprint(dashboard_bp)
+    app.register_blueprint(stores_bp, url_prefix='/api/stores')
+    app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
     app.register_blueprint(notifications_bp, url_prefix='/api/notifications')
 
     # Handle OPTIONS requests for all /api/* routes

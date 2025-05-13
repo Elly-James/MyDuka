@@ -67,124 +67,224 @@ def refresh():
         logger.error(f"Token refresh failed: {type(e).__name__} - {str(e)}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'Invalid refresh token'}), 401
 
-@auth_bp.route('/register', methods=['POST'])
+@auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
-    """
-    Register a new user using an invitation token.
-    Body:
-        - token (str): Invitation token
-        - password (str): User password
-        - name (str): User name
-        - email (str): User email
-    Responses:
-        - 201: Registration successful, returns access token and user info
-        - 400: Missing required fields, invalid token, or validation error
-        - 409: Email already in use
-        - 500: Internal server error
-    """
+    """Handle both token verification (GET) and registration (POST)"""
     try:
-        data = request.get_json() or {}
-        if not all(k in data for k in ('token', 'password', 'name', 'email')):
-            logger.error("Missing required fields in registration request")
-            return jsonify({'status': 'error', 'message': 'Name, email, password, and token are required'}), 400
-
-        try:
-            user_schema.validate({'email': data['email'], 'name': data['name']})
-        except ValidationError as ve:
-            logger.error(f"Validation errors: {ve.messages}")
-            return jsonify({'status': 'error', 'message': 'Validation error', 'errors': ve.messages}), 400
-
-        invitation = db.session.query(Invitation).filter_by(token=data['token'], email=data['email'].lower()).first()
-        if not invitation:
-            logger.warning(f"Invalid invitation token: {data['token']} for email: {data['email']}")
-            return jsonify({'status': 'error', 'message': 'Invalid invitation token'}), 400
-        if invitation.is_used:
-            logger.warning(f"Invitation token already used: {data['token']}")
-            return jsonify({'status': 'error', 'message': 'Invitation already used'}), 400
-        if invitation.expires_at < datetime.utcnow():
-            invitation.status = InvitationStatus.EXPIRED
-            db.session.commit()
-            logger.warning(f"Invitation token expired: {data['token']}")
-            return jsonify({'status': 'error', 'message': 'Invitation expired'}), 400
-
-        if db.session.query(User).filter_by(email=data['email'].lower()).first():
-            logger.error(f"Email already in use: {data['email']}")
-            return jsonify({'status': 'error', 'message': 'Email already in use'}), 409
-
-        try:
-            with db.session.begin_nested():
-                user = User(
-                    email=data['email'].lower(),
-                    name=data['name'].strip(),
-                    role=invitation.role,
-                    status=UserStatus.ACTIVE,
-                    _password=generate_password_hash(data['password']),
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow()
-                )
-                db.session.add(user)
-                invitation.is_used = True
-                invitation.status = InvitationStatus.ACCEPTED
-                db.session.flush()
-
-                if invitation.store_id:
-                    db.session.execute(
-                        user_store.insert().values(user_id=user.id, store_id=invitation.store_id)
-                    )
-
-                notification = Notification(
-                    user_id=user.id,
-                    message=f"Welcome to MyDuka! Your {user.role.name.lower()} account has been created.",
-                    type=NotificationType.ACCOUNT_STATUS,
-                    created_at=datetime.utcnow()
-                )
-                db.session.add(notification)
-                db.session.flush()
-
-                # Preload stores for serialization
-                user = db.session.query(User).options(selectinload(User.stores)).get(user.id)
-                user_data = user_schema.dump(user)
-                store = db.session.get(Store, invitation.store_id)
-                user_data['store'] = {'id': store.id, 'name': store.name} if store else None
-                user_data.pop('stores', None)
-                user_data['role'] = user.role.name
-                user_data['status'] = user.status.name
-
-                socketio.emit('user_created', user_data, namespace='/')
-                socketio.emit('new_notification', {
-                    'id': notification.id,
-                    'user_id': user.id,
-                    'message': notification.message,
-                    'type': notification.type.name,
-                    'created_at': notification.created_at.isoformat()
-                }, room=f'user_{user.id}')
-
-            db.session.commit()
-
-            access_token = create_access_token(identity=user)
-            refresh_token = create_refresh_token(identity=user)
-
-            logger.info(f"User registered successfully: {user.email}, User ID: {user.id}")
+        if request.method == 'GET':
+            # Token verification
+            token = request.args.get('token')
+            email = request.args.get('email')
+            
+            if not token or not email:
+                logger.error("Missing token or email in registration link")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Invalid registration link - missing token or email',
+                    'code': 'INVALID_LINK'
+                }), 400
+            
+            # More flexible query to identify why token is invalid
+            invitation = db.session.query(Invitation).filter_by(
+                token=token,
+                email=email.lower()
+            ).first()
+            
+            if not invitation:
+                logger.warning(f"Invitation not found for token: {token}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Invalid invitation link',
+                    'code': 'INVALID_TOKEN'
+                }), 400
+            
+            if invitation.is_used:
+                logger.warning(f"Invitation already used: {token}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'This invitation has already been used',
+                    'code': 'USED_TOKEN'
+                }), 400
+            
+            if invitation.expires_at < datetime.utcnow():
+                logger.warning(f"Invitation expired: {token}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'This invitation has expired',
+                    'code': 'EXPIRED_TOKEN'
+                }), 400
+            
+            if invitation.status != InvitationStatus.PENDING:
+                logger.warning(f"Invitation has invalid status: {invitation.status}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'This invitation is no longer valid',
+                    'code': 'INVALID_STATUS'
+                }), 400
+            
             return jsonify({
                 'status': 'success',
-                'message': 'User registered successfully',
-                'access_token': access_token,
-                'refresh_token': refresh_token,
-                'user': user_data
-            }), 201
+                'message': 'Valid invitation',
+                'email': email,
+                'invitation': invitation_schema.dump(invitation)
+            }), 200
 
-        except IntegrityError:
-            db.session.rollback()
-            logger.error(f"Email already in use: {data['email']}")
-            return jsonify({'status': 'error', 'message': 'Email already in use'}), 409
-        except SQLAlchemyError as e:
-            db.session.rollback()
-            logger.error(f"Database error during registration: {str(e)}", exc_info=True)
-            return jsonify({'status': 'error', 'message': 'Database error'}), 500
+        elif request.method == 'POST':
+            # Registration submission
+            data = request.get_json() or {}
+            required_fields = ['token', 'email', 'name', 'password']
+            if not all(k in data for k in required_fields):
+                logger.error("Missing required fields in registration request")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'All fields are required: ' + ', '.join(required_fields),
+                    'code': 'MISSING_FIELDS'
+                }), 400
+
+            # Validate input
+            try:
+                user_schema.validate({'email': data['email'], 'name': data['name']})
+            except ValidationError as ve:
+                logger.error(f"Validation errors: {ve.messages}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Validation error',
+                    'errors': ve.messages,
+                    'code': 'VALIDATION_ERROR'
+                }), 400
+
+            # Verify invitation again (in case it changed since GET)
+            invitation = db.session.query(Invitation).filter_by(
+                token=data['token'],
+                email=data['email'].lower()
+            ).first()
+            
+            if not invitation:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Invalid invitation token',
+                    'code': 'INVALID_TOKEN'
+                }), 400
+            
+            if invitation.is_used or invitation.status != InvitationStatus.PENDING:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Invitation already used or expired',
+                    'code': 'USED_TOKEN'
+                }), 400
+            
+            if invitation.expires_at < datetime.utcnow():
+                invitation.status = InvitationStatus.EXPIRED
+                db.session.commit()
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Invitation has expired',
+                    'code': 'EXPIRED_TOKEN'
+                }), 400
+
+            # Check if email already registered
+            if db.session.query(User).filter_by(email=data['email'].lower()).first():
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Email already registered',
+                    'code': 'EMAIL_EXISTS'
+                }), 409
+
+            try:
+                with db.session.begin_nested():
+                    # Create user
+                    user = User(
+                        email=data['email'].lower(),
+                        name=data['name'].strip(),
+                        role=invitation.role,
+                        status=UserStatus.ACTIVE,
+                        _password=generate_password_hash(data['password']),
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow()
+                    )
+                    db.session.add(user)
+                    
+                    # Update invitation
+                    invitation.is_used = True
+                    invitation.status = InvitationStatus.ACCEPTED
+                    invitation.updated_at = datetime.utcnow()
+                    
+                    # Assign to store if specified
+                    if invitation.store_id:
+                        db.session.execute(
+                            user_store.insert().values(
+                                user_id=user.id,
+                                store_id=invitation.store_id
+                            )
+                        )
+                    
+                    # Create welcome notification
+                    notification = Notification(
+                        user_id=user.id,
+                        message=f"Welcome! Your {invitation.role.name.lower()} account is ready.",
+                        type=NotificationType.ACCOUNT_STATUS,
+                        created_at=datetime.utcnow()
+                    )
+                    db.session.add(notification)
+                    
+                    # Preload user for response
+                    db.session.flush()
+                    user = db.session.query(User).options(
+                        selectinload(User.stores)
+                    ).get(user.id)
+                    
+                    user_data = user_schema.dump(user)
+                    user_data['role'] = user.role.name
+                    user_data['status'] = user.status.name
+
+                    # Emit events
+                    socketio.emit('user_created', user_data, namespace='/')
+                    socketio.emit('new_notification', {
+                        'id': notification.id,
+                        'user_id': user.id,
+                        'message': notification.message,
+                        'type': notification.type.name,
+                        'created_at': notification.created_at.isoformat()
+                    }, room=f'user_{user.id}')
+
+                db.session.commit()
+                
+                # Create tokens
+                access_token = create_access_token(identity=user)
+                refresh_token = create_refresh_token(identity=user)
+
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Registration successful',
+                    'access_token': access_token,
+                    'refresh_token': refresh_token,
+                    'user': user_data,
+                    'redirect_to': f'/{user.role.name.lower()}-dashboard'
+                }), 201
+
+            except IntegrityError:
+                db.session.rollback()
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Email already registered',
+                    'code': 'EMAIL_EXISTS'
+                }), 409
+            except SQLAlchemyError as e:
+                db.session.rollback()
+                logger.error(f"Database error: {str(e)}", exc_info=True)
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Database error',
+                    'code': 'DATABASE_ERROR'
+                }), 500
 
     except Exception as e:
-        logger.error(f"Error in register: {type(e).__name__} - {str(e)}", exc_info=True)
-        return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'message': 'Internal server error',
+            'code': 'SERVER_ERROR'
+        }), 500
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
