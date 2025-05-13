@@ -902,3 +902,345 @@
     overflow-x: auto;
   }
 }
+
+
+/* Dashboard*/
+/* Dashboard Container */
+.dashboard-container {
+  display: flex;
+  min-height: 100vh;
+}
+
+.dashboard-content {
+  flex: 1;
+  padding: 20px;
+  background-color: #fff;
+  margin-left: 250px;
+}
+
+/* Dashboard Header */
+.dashboard-header {
+  margin-bottom: 30px;
+}
+
+.dashboard-header h1 {
+  color: #2E3A8C;
+  font-size: 24px;
+  margin-bottom: 5px;
+}
+
+.dashboard-header h2 {
+  color: #4a5568;
+  font-size: 18px;
+  margin-bottom: 15px;
+}
+
+/* Dashboard Navigation */
+.dashboard-nav {
+  display: flex;
+  gap: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 20px;
+}
+
+.dashboard-nav span {
+  color: #718096;
+  cursor: pointer;
+  padding: 5px 0;
+}
+
+.dashboard-nav span.active {
+  color: #2E3A8C;
+  border-bottom: 2px solid #2E3A8C;
+}
+
+/* Supply Requests */
+.supply-requests {
+  margin-bottom: 30px;
+}
+
+.supply-requests h3 {
+  color: #2E3A8C;
+  margin-bottom: 15px;
+}
+
+.supply-requests table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.supply-requests th, 
+.supply-requests td {
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.supply-requests th {
+  background-color: #f8fafc;
+  color: #4a5568;
+  font-weight: 600;
+}
+
+.supply-requests tr:hover {
+  background-color: #f8fafc;
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.action-button {
+  background: none;
+  border: 1px solid #e2e8f0;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #4a5568;
+}
+
+.action-button:hover {
+  background-color: #f8fafc;
+}
+
+/* Alert Section */
+.alert-section {
+  margin-bottom: 30px;
+}
+
+.alert-section h3 {
+  color: #2E3A8C;
+  margin-bottom: 15px;
+}
+
+.add-clerk-button {
+  background-color: #2E3A8C;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Clerk Performance */
+.clerk-performance {
+  margin-bottom: 30px;
+}
+
+.clerk-performance h3 {
+  color: #2E3A8C;
+  margin-bottom: 15px;
+}
+
+.performance-months {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 15px;
+  color: #4a5568;
+}
+
+.chart-container {
+  height: 300px;
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Error Message */
+.error-message {
+  color: #e74c3c;
+  background-color: #fde8e8;
+  padding: 10px;
+  border-radius: 4px;
+  margin: 10px 0;
+  text-align: center;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .dashboard-content {
+    margin-left: 0;
+    padding: 15px;
+  }
+  
+  .dashboard-nav,
+  .performance-months {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .supply-requests table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+/*StoreReports*/
+/* Store Reports Container */
+.store-reports-container {
+  display: flex;
+  min-height: 100vh;
+}
+
+.store-reports-content {
+  flex: 1;
+  padding: 20px;
+  background-color: #fff;
+  margin-left: 250px;
+}
+
+/* Store Reports Header */
+.store-reports-header {
+  margin-bottom: 30px;
+}
+
+.store-reports-header h1 {
+  color: #2E3A8C;
+  font-size: 24px;
+  margin-bottom: 5px;
+}
+
+.store-reports-header h2 {
+  color: #4a5568;
+  font-size: 18px;
+  margin-bottom: 15px;
+}
+
+/* Store Reports Navigation */
+.store-reports-nav {
+  display: flex;
+  gap: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 20px;
+}
+
+.store-reports-nav span {
+  color: #718096;
+  cursor: pointer;
+  padding: 5px 0;
+}
+
+.store-reports-nav span.active {
+  color: #2E3A8C;
+  border-bottom: 2px solid #2E3A8C;
+}
+
+/* Reports Section */
+.reports-section {
+  margin-bottom: 30px;
+}
+
+.reports-section h3 {
+  color: #2E3A8C;
+  margin-bottom: 15px;
+}
+
+.report-types {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.report-types span {
+  color: #4a5568;
+  cursor: pointer;
+}
+
+.export-button {
+  background-color: #2E3A8C;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+/* Sales Trend */
+.sales-trend {
+  margin-bottom: 30px;
+}
+
+.sales-trend h3 {
+  color: #2E3A8C;
+  margin-bottom: 15px;
+}
+
+.trend-values {
+  display: flex;
+  gap: 20px;
+  color: #4a5568;
+}
+
+/* Store Reports Table */
+.store-reports-table {
+  margin-bottom: 30px;
+}
+
+.store-reports-table h2 {
+  color: #2E3A8C;
+  margin-bottom: 15px;
+}
+
+.store-reports-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.store-reports-table th, 
+.store-reports-table td {
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.store-reports-table th {
+  background-color: #f8fafc;
+  color: #4a5568;
+  font-weight: 600;
+}
+
+.store-reports-table tr:hover {
+  background-color: #f8fafc;
+}
+
+.no-data {
+  color: #718096;
+  text-align: center;
+  padding: 20px;
+}
+
+/* Error Message */
+.error-message {
+  color: #e74c3c;
+  background-color: #fde8e8;
+  padding: 10px;
+  border-radius: 4px;
+  margin: 10px 0;
+  text-align: center;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .store-reports-content {
+    margin-left: 0;
+    padding: 15px;
+  }
+  
+  .store-reports-nav,
+  .report-types,
+  .trend-values {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .store-reports-table table {
+    display: block;
+    overflow-x: auto;
+  }
+}
