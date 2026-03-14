@@ -42,10 +42,10 @@ class DevelopmentConfig(Config):
 
 class TestingConfig(Config):
     TESTING = True
-    _test_db_url = os.getenv('TEST_DATABASE_URL')
-    if not _test_db_url:
-        raise ValueError("TEST_DATABASE_URL environment variable is not set")
-    SQLALCHEMY_DATABASE_URI = _test_db_url.replace('postgres://', 'postgresql://', 1)
+    # Only validate TEST_DATABASE_URL when actually running tests, not at import time
+    _test_db_url = os.getenv('TEST_DATABASE_URL') or os.getenv('DATABASE_URL')
+    if _test_db_url:
+        SQLALCHEMY_DATABASE_URI = _test_db_url.replace('postgres://', 'postgresql://', 1)
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=5)
     WTF_CSRF_ENABLED = False
     CORS_ORIGINS = 'http://localhost:5173'
@@ -55,7 +55,6 @@ class TestingConfig(Config):
 class ProductionConfig(Config):
     DEBUG = False
     SQLALCHEMY_ECHO = False
-    # These are set via Render environment variables after frontend is deployed
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'https://your-frontend-domain.onrender.com')
     SOCKETIO_CORS_ORIGINS = os.getenv('SOCKETIO_CORS_ORIGINS', 'https://your-frontend-domain.onrender.com')
 
