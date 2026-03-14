@@ -73,7 +73,7 @@ def create_app(config_name=None):
             logger.info(f'Initializing SocketIO with CORS origins: {socketio_origins}')
             socketio.init_app(
                 app,
-                async_mode='eventlet',
+                async_mode='gevent',
                 cors_allowed_origins=socketio_origins,
                 path='/socket.io',
                 ping_timeout=10,

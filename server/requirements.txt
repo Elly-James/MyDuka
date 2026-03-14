@@ -22,7 +22,8 @@ google-auth-httplib2==0.2.0
 requests==2.32.3
 google-api-python-client==2.149.0
 redis==5.0.8
-eventlet==0.36.0
+gevent==23.9.1
+gevent-websocket==0.10.1
 marshmallow==3.22.0
 MarkupSafe==2.1.5
 Jinja2==3.1.4

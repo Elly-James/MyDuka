@@ -13,18 +13,14 @@ jwt = JWTManager()
 mail = Mail()
 migrate = Migrate()
 
-# SocketIO configuration with eventlet for WebSocket support
-socketio = SocketIO(async_mode='eventlet', logger=True, engineio_logger=True)
+# SocketIO — switched from eventlet to gevent for Python 3.11+ compatibility on Render
+socketio = SocketIO(async_mode='gevent', logger=True, engineio_logger=True)
 
-# Cache configuration with fallback to SimpleCache
-cache = Cache(config={
-    'CACHE_TYPE': 'RedisCache',
-    'CACHE_REDIS_URL': None,  # Set in app config
-    'CACHE_DEFAULT_TIMEOUT': 3600,
-    'CACHE_TYPE_FALLBACK': 'SimpleCache'
-})
+# Cache — initialized without config here; config is applied in create_app()
+# Will use SimpleCache by default, RedisCache if CACHE_REDIS_URL is set in env
+cache = Cache()
 
-# Rate limiting configuration
+# Rate limiting — uses in-memory storage (sufficient for single-worker Render free tier)
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=["200 per day", "100 per hour"],
