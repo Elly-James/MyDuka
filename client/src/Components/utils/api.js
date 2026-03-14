@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { formatDate, formatCurrency } from './formatters';
 
+// In production (Render), VITE_API_BASE_URL is set as an environment variable
+// pointing to your backend Render URL e.g. https://myduka-backend.onrender.com
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 const ROLES = {
@@ -82,9 +84,11 @@ const api = axios.create({
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
   },
+  // withCredentials must be true for JWT cookies / CORS with credentials
   withCredentials: true,
 });
 
+// Attach JWT token to every request automatically
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -96,19 +100,24 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Handle 401/422 (expired/invalid token) and 429 (rate limit) globally
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Rate limit hit — wait and retry once
     if (error.response?.status === 429) {
-      const retryAfter = parseInt(error.response.headers['retry-after'] || 1000, 10);
+      const retryAfter = parseInt(error.response.headers['retry-after'] || '1000', 10);
       await new Promise((resolve) => setTimeout(resolve, retryAfter));
       return api(error.config);
     }
+
+    // Token expired or invalid — clear storage and redirect to login
     if (error.response?.status === 401 || error.response?.status === 422) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = ROUTES.LOGIN;
     }
+
     return Promise.reject(error);
   }
 );

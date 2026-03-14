@@ -14,15 +14,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def create_app(config_name='development'):
+
+def create_app(config_name=None):
+    # Auto-detect environment if not specified
+    if config_name is None:
+        config_name = os.getenv('FLASK_ENV', 'development')
+
     app = Flask(__name__)
     app.config.from_object(config[config_name])
-    
+
     # Database connection pooling
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_size': 10,
         'max_overflow': 20,
         'pool_timeout': 30,
+        'pool_pre_ping': True,  # Helps recover from dropped DB connections on Render
     }
 
     # Initialize extensions
@@ -30,11 +36,22 @@ def create_app(config_name='development'):
         db.init_app(app)
         jwt.init_app(app)
         mail.init_app(app)
+
+        # Cache: use SimpleCache if no Redis URL is set (safe for Render free tier)
+        redis_url = app.config.get('CACHE_REDIS_URL')
+        if redis_url:
+            app.config['CACHE_TYPE'] = 'RedisCache'
+            app.config['CACHE_REDIS_URL'] = redis_url
+        else:
+            app.config['CACHE_TYPE'] = 'SimpleCache'
         cache.init_app(app)
+
         migrate.init_app(app, db)
-        
-        # Configure CORS
-        cors_origins = app.config.get('CORS_ORIGINS', 'http://localhost:5173').split(',')
+
+        # Configure CORS — reads from environment variable set in Render dashboard
+        cors_origins_raw = app.config.get('CORS_ORIGINS', 'http://localhost:5173')
+        cors_origins = [o.strip() for o in cors_origins_raw.split(',')]
+
         CORS(app, resources={
             r"/api/*": {
                 'origins': cors_origins,
@@ -44,18 +61,20 @@ def create_app(config_name='development'):
                 'expose_headers': ['Content-Type', 'Authorization']
             }
         })
-        
+
         # Configure Flask-Limiter
         app.config['RATELIMIT_STORAGE_URI'] = app.config.get('LIMITER_STORAGE_URI', 'memory://')
         limiter.init_app(app)
-        
+
         # Initialize SocketIO after other extensions
         if config_name != 'testing':
-            logger.info(f'Initializing SocketIO with CORS origins: {cors_origins}')
+            socketio_origins_raw = app.config.get('SOCKETIO_CORS_ORIGINS', 'http://localhost:5173')
+            socketio_origins = [o.strip() for o in socketio_origins_raw.split(',')]
+            logger.info(f'Initializing SocketIO with CORS origins: {socketio_origins}')
             socketio.init_app(
                 app,
                 async_mode='eventlet',
-                cors_allowed_origins=cors_origins,
+                cors_allowed_origins=socketio_origins,
                 path='/socket.io',
                 ping_timeout=10,
                 ping_interval=5,
@@ -66,6 +85,7 @@ def create_app(config_name='development'):
                 logger=True,
                 engineio_logger=True
             )
+
     except Exception as e:
         logger.error(f'Failed to initialize extensions: {str(e)}')
         raise
@@ -87,16 +107,18 @@ def create_app(config_name='development'):
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
     app.register_blueprint(notifications_bp, url_prefix='/api/notifications')
 
-    # Handle OPTIONS requests for all /api/* routes
+    # Handle OPTIONS preflight requests — uses dynamic CORS origins (not hardcoded)
     @app.route('/api/<path:path>', methods=['OPTIONS'])
     def handle_options(path):
-        logger.info(f'Handling OPTIONS request for /api/{path} from {request.remote_addr}')
-        return '', 204, {
-            'Access-Control-Allow-Origin': 'http://localhost:5173',
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
-            'Access-Control-Allow-Credentials': 'true'
-        }
+        origin = request.headers.get('Origin', '')
+        if origin in cors_origins:
+            return '', 204, {
+                'Access-Control-Allow-Origin': origin,
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+                'Access-Control-Allow-Credentials': 'true'
+            }
+        return '', 204
 
     # Middleware to log requests
     @app.before_request
@@ -106,7 +128,6 @@ def create_app(config_name='development'):
     # Apply global rate limit to the app
     @app.after_request
     def apply_global_rate_limit(response):
-        limiter.limit("500 per day;100 per hour")(lambda: None)  # Dummy callable
         return response
 
     # Role-guarded dashboard routes
@@ -134,12 +155,13 @@ def create_app(config_name='development'):
             abort(403, description='Clerk role required')
         return jsonify({'message': 'Clerk dashboard'})
 
-    # Health check
+    # Health check — useful to verify Render deployment is alive
     @app.route('/health')
     @limiter.exempt
     def health():
         try:
-            db.session.execute('SELECT 1')
+            from sqlalchemy import text
+            db.session.execute(text('SELECT 1'))
             return jsonify({'status': 'healthy', 'database': 'connected'})
         except Exception as e:
             logger.error(f'Health check failed: {str(e)}')
@@ -166,9 +188,8 @@ def create_app(config_name='development'):
     def too_many_requests(error):
         return jsonify({'status': 'error', 'message': 'Rate limit exceeded'}), 429
 
-    # JWT error handler
     @app.errorhandler(Exception)
-    def handle_jwt_error(error):
+    def handle_exception(error):
         if 'JWT' in str(error) or 'token' in str(error).lower():
             logger.error(f'JWT Error: {str(error)}')
             return jsonify({'status': 'error', 'message': 'Invalid or missing token'}), 401
@@ -181,13 +202,13 @@ def create_app(config_name='development'):
         return {
             'id': user.id,
             'role': user.role.name,
-            'store_id': None  # Store ID not used since user_store handles associations
+            'store_id': None
         }
 
     @jwt.user_lookup_loader
     def user_lookup_callback(_jwt_header, jwt_data):
         identity = jwt_data['sub']
-        return db.session.query(User).get(identity['id'])
+        return db.session.get(User, identity['id'])
 
     # WebSocket event handlers
     @socketio.on('connect')
@@ -208,6 +229,7 @@ def create_app(config_name='development'):
 
     logger.info(f'Application started with config: {config_name}')
     return app
+
 
 if __name__ == '__main__':
     app = create_app()
