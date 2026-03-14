@@ -32,3 +32,4 @@ seaborn==0.13.2
 numpy==1.26.4
 gunicorn==21.2.0
 setuptools>=65.0.0
+pytz==2024.1
