@@ -1,4 +1,4 @@
-#!/home/smoking/Phase5/MyDuka/server/venv/bin/python
+#!/home/smokingmirror/SmokingMirror_Projects/MyDuka/server/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys
