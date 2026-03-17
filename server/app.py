@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 from flask import Flask, jsonify, abort, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_cors import CORS
@@ -125,7 +126,6 @@ def create_app(config_name=None):
     def log_request_info():
         logger.info(f'Request: {request.method} {request.url} from {request.remote_addr}')
 
-    # Apply global rate limit to the app
     @app.after_request
     def apply_global_rate_limit(response):
         return response
@@ -155,7 +155,7 @@ def create_app(config_name=None):
             abort(403, description='Clerk role required')
         return jsonify({'message': 'Clerk dashboard'})
 
-    # Health check — useful to verify Render deployment is alive
+    # Health check
     @app.route('/health')
     @limiter.exempt
     def health():
@@ -196,19 +196,53 @@ def create_app(config_name=None):
         logger.error(f'Unhandled Exception: {str(error)}')
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
-    # JWT callbacks
+    # -------------------------------------------------------------------------
+    # JWT CALLBACKS
+    #
+    # Flask-JWT-Extended 4.x requires the JWT subject (sub) to be a STRING.
+    # Your original code stored a dict which caused "Subject must be a string".
+    #
+    # Fix: serialize the dict to a JSON string when creating tokens, then
+    # monkey-patch get_jwt_identity() to automatically deserialize it back
+    # to a dict everywhere it is called — so all 40+ route usages of
+    # identity['id'] and identity['role'] continue working with zero changes.
+    # -------------------------------------------------------------------------
     @jwt.user_identity_loader
     def user_identity_lookup(user):
-        return {
+        # Serialize dict → JSON string to satisfy Flask-JWT-Extended 4.x
+        return json.dumps({
             'id': user.id,
             'role': user.role.name,
             'store_id': None
-        }
+        })
 
     @jwt.user_lookup_loader
     def user_lookup_callback(_jwt_header, jwt_data):
-        identity = jwt_data['sub']
+        # Deserialize JSON string → dict, then fetch user by id
+        identity = json.loads(jwt_data['sub'])
         return db.session.get(User, identity['id'])
+
+    # Monkey-patch flask_jwt_extended.get_jwt_identity globally so every
+    # blueprint/route that calls get_jwt_identity() gets a dict back,
+    # not the raw JSON string stored inside the token.
+    import flask_jwt_extended as _jwt_ext
+
+    _original_get_jwt_identity = _jwt_ext.get_jwt_identity
+
+    def _patched_get_jwt_identity():
+        raw = _original_get_jwt_identity()
+        if isinstance(raw, str):
+            try:
+                return json.loads(raw)
+            except (ValueError, TypeError):
+                return raw
+        return raw
+
+    # Patch both the module-level function and the already-imported name
+    _jwt_ext.get_jwt_identity = _patched_get_jwt_identity
+    # Also update the name imported at the top of this file
+    import sys
+    sys.modules[__name__].__dict__['get_jwt_identity'] = _patched_get_jwt_identity
 
     # WebSocket event handlers
     @socketio.on('connect')
