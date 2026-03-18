@@ -7,12 +7,6 @@ from sqlalchemy import func
 from datetime import datetime, timedelta
 import logging
 import json
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
-import openpyxl
-from io import BytesIO
 from functools import wraps
 import pytz
 
@@ -857,7 +851,19 @@ def clerk_performance():
 @jwt_required()
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
 def export_report():
-    """Export report as PDF or Excel."""
+    """Export report as PDF or Excel.
+    Heavy libraries (reportlab, openpyxl) are imported here only when needed
+    so they do not consume memory on every server startup.
+    """
+    # --- Lazy imports: only loaded when /export is actually called ---
+    from reportlab.lib import colors as rl_colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+    from reportlab.lib.styles import getSampleStyleSheet
+    from io import BytesIO
+    import openpyxl
+    # -----------------------------------------------------------------
+
     current_user_id = None
     try:
         identity = get_identity()
@@ -1044,14 +1050,14 @@ def export_report():
 
             table = Table(table_data)
             table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('BACKGROUND', (0, 0), (-1, 0), rl_colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0, 0), (-1, 0), 14),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ('BACKGROUND', (0, 1), (-1, -1), rl_colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, rl_colors.black)
             ]))
             elements.append(table)
 
