@@ -22,7 +22,7 @@ const LoginPage = () => {
       const response = await api.post('/api/auth/login', { email, password });
       console.log('Login Response:', response.data);
       const { access_token, user } = response.data;
-      
+
       if (!access_token) {
         throw new Error('No access token received');
       }
@@ -51,20 +51,39 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="login-container">
+    /*
+      The outer div uses fixed positioning to break completely out of
+      any parent layout (sidebar wrappers, flex containers, grid layouts)
+      that App.jsx may be applying. This guarantees the login page is
+      always perfectly centered on the full viewport regardless of routing.
+    */
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100vw',
+        height: '100vh',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 9999,
+        overflowY: 'auto',
+      }}
+      className="login-container"
+    >
       <div className="auth-panel">
         <div className="panel-header">
           <h1>MyDuka</h1>
           <p>Simplifying record keeping and stock tracking for businesses</p>
         </div>
-        
+
         <div className="panel-body">
           <h2 className="form-title">Log in to your account</h2>
-          
+
           {error && (
             <div className="error">{error}</div>
           )}
-          
+
           <form onSubmit={handleSubmit} className="auth-form">
             <div className="input-group">
               <input
@@ -75,16 +94,19 @@ const LoginPage = () => {
                 required
               />
             </div>
-            
+
             <div className="password-wrapper">
               <input
-                type={showPassword ? "text" : "password"}
+                type={showPassword ? 'text' : 'password'}
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
-              <span className="eye-icon" onClick={() => setShowPassword(!showPassword)}>
+              <span
+                className="eye-icon"
+                onClick={() => setShowPassword(!showPassword)}
+              >
                 {showPassword ? (
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                     <path d="M13.359 11.238C15.06 9.72 16 8 16 8s-3-5.5-8-5.5a7.028 7.028 0 0 0-2.79.588l.77.771A5.944 5.944 0 0 1 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.134 13.134 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755-.165.165-.337.328-.517.486l.708.709z"/>
@@ -99,24 +121,24 @@ const LoginPage = () => {
                 )}
               </span>
             </div>
-            
+
             <div className="forgot-password">
               <Link to={ROUTES.FORGOT_PASSWORD}>Forgot password?</Link>
             </div>
-            
-            <button 
-              type="submit" 
-              className="submit-button"
+
+            <button
+              type="submit"
+              className={`submit-button${isSubmitting ? ' loading' : ''}`}
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Processing...' : 'Sign In'}
+              <span>{isSubmitting ? 'Signing in...' : 'Sign In'}</span>
             </button>
           </form>
-          
+
           <div className="form-divider">
             <span>Or continue with</span>
           </div>
-          
+
           <div className="social-buttons">
             <button onClick={handleGoogleLogin} className="social-button google">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
@@ -131,9 +153,10 @@ const LoginPage = () => {
               Apple
             </button>
           </div>
-          
+
           <p className="toggle-text">
-            Don't have an account? <Link to={ROUTES.REGISTER} className="toggle-link">Sign up</Link>
+            Don't have an account?{' '}
+            <Link to={ROUTES.REGISTER} className="toggle-link">Sign up</Link>
           </p>
         </div>
       </div>
