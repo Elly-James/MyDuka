@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt
 from extensions import db
 from models import Store, User, UserRole, InventoryEntry, SalesRecord, Product, PaymentStatus, user_store
 from schemas import StoreSchema, StoreDetailSchema
@@ -7,28 +7,47 @@ from sqlalchemy import func
 from sqlalchemy.sql.expression import case
 from datetime import datetime, timedelta
 import logging
+import json
 from functools import wraps
 import calendar
 
 stores_bp = Blueprint('stores', __name__, url_prefix='/api/stores')
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)  # Changed to DEBUG for detailed tracing
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+
+def get_identity():
+    """
+    Safely decode JWT identity dict from JSON string subject.
+    Flask-JWT-Extended 4.x stores sub as a JSON string — this decodes it back to a dict.
+    """
+    raw = get_jwt().get('sub', '{}')
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except (ValueError, TypeError):
+            pass
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
 
 def role_required(roles):
     """Decorator to restrict access to specific roles"""
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            identity = get_jwt_identity()
-            current_user_role = identity['role']
+            identity = get_identity()
+            current_user_role = identity.get('role')
             if current_user_role not in [role.name for role in roles]:
-                logger.warning(f"Unauthorized access attempt by user ID: {identity['id']}, role: {current_user_role}")
+                logger.warning(f"Unauthorized access attempt by user ID: {identity.get('id')}, role: {current_user_role}")
                 return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
             return f(*args, **kwargs)
         return decorated_function
     return decorator
+
 
 def get_period_dates(period, week_start='monday'):
     """Helper function to get date ranges for reporting periods"""
@@ -52,6 +71,7 @@ def get_period_dates(period, week_start='monday'):
         end = today
     return start, end
 
+
 @stores_bp.route('', methods=['GET'])
 @jwt_required()
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
@@ -65,10 +85,11 @@ def get_stores():
         - 404: User not found
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.debug(f"Fetching stores for user ID: {current_user_id}, role: {current_user_role}")
 
         current_user = db.session.get(User, current_user_id)
@@ -102,6 +123,7 @@ def get_stores():
         logger.error(f"Error fetching stores for user ID {current_user_id}: {type(e).__name__} - {str(e)}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @stores_bp.route('/<int:store_id>', methods=['GET'])
 @jwt_required()
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
@@ -123,10 +145,11 @@ def get_store_details(store_id):
         - 404: User or store not found
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Fetching details for store ID {store_id} by user ID: {current_user_id}, role: {current_user_role}")
 
         current_user = db.session.get(User, current_user_id)
@@ -295,6 +318,7 @@ def get_store_details(store_id):
         logger.error(f"Error fetching store details for store ID {store_id} by user ID {current_user_id}: {type(e).__name__} - {str(e)}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @stores_bp.route('', methods=['POST'])
 @jwt_required()
 @role_required([UserRole.ADMIN])
@@ -312,10 +336,11 @@ def create_store():
         - 404: User not found
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Creating store by user ID: {current_user_id}, role: {current_user_role}")
 
         current_user = db.session.get(User, current_user_id)
@@ -359,6 +384,7 @@ def create_store():
         logger.error(f"Error creating store by user ID {current_user_id}: {type(e).__name__} - {str(e)}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @stores_bp.route('/<int:store_id>', methods=['PUT'])
 @jwt_required()
 @role_required([UserRole.ADMIN])
@@ -377,10 +403,11 @@ def update_store(store_id):
         - 404: User or store not found
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Updating store ID {store_id} by user ID: {current_user_id}, role: {current_user_role}")
 
         current_user = db.session.get(User, current_user_id)
@@ -435,6 +462,7 @@ def update_store(store_id):
         logger.error(f"Error updating store ID {store_id} by user ID {current_user_id}: {type(e).__name__} - {str(e)}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @stores_bp.route('/<int:store_id>', methods=['DELETE'])
 @jwt_required()
 @role_required([UserRole.ADMIN])
@@ -447,10 +475,11 @@ def delete_store(store_id):
         - 404: User or store not found
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Deleting store ID {store_id} by user ID: {current_user_id}, role: {current_user_role}")
 
         current_user = db.session.get(User, current_user_id)

@@ -1,11 +1,12 @@
 from flask import Blueprint, jsonify, request, send_file
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt
 from extensions import db, cache
 from models import SalesRecord, InventoryEntry, Product, Supplier, User, UserRole, Store, PaymentStatus, ProductCategory, user_store
 from schemas import SalesReportSchema, SpoilageReportSchema, PaymentStatusReportSchema
 from sqlalchemy import func
 from datetime import datetime, timedelta
 import logging
+import json
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
@@ -21,18 +22,36 @@ reports_bp = Blueprint('reports', __name__, url_prefix='/api/reports')
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def get_identity():
+    """
+    Safely decode JWT identity dict from JSON string subject.
+    Flask-JWT-Extended 4.x stores sub as a JSON string — this decodes it back to a dict.
+    """
+    raw = get_jwt().get('sub', '{}')
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except (ValueError, TypeError):
+            pass
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
 def role_required(roles):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            identity = get_jwt_identity()
-            current_user_role = identity['role']
+            identity = get_identity()
+            current_user_role = identity.get('role')
             if current_user_role not in [role.name for role in roles]:
-                logger.warning(f"Unauthorized access attempt by user ID: {identity['id']}, role: {current_user_role}")
+                logger.warning(f"Unauthorized access attempt by user ID: {identity.get('id')}, role: {current_user_role}")
                 return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
             return f(*args, **kwargs)
         return decorated_function
     return decorator
+
 
 def get_period_dates(period):
     """Calculate start and end dates for the given period (weekly, monthly) with timezone handling."""
@@ -52,6 +71,7 @@ def get_period_dates(period):
     logger.info(f"Period: {period}, Start: {start}, End: {end}")
     return start, end
 
+
 def get_previous_period_dates(period, end_date):
     """Calculate start and end dates for the previous period."""
     if period == 'weekly':
@@ -66,14 +86,15 @@ def get_previous_period_dates(period, end_date):
     logger.info(f"Previous Period: {period}, Start: {start}, End: {end}")
     return start, end
 
+
 def get_store_ids(user_id, role, store_id=None):
     """Get accessible store IDs for the user based on their role."""
     user = db.session.get(User, user_id)
     if not user:
         return []
-    
+
     store_ids = [store.id for store in user.stores]
-    
+
     if role == UserRole.MERCHANT:
         if store_id and store_id in store_ids:
             return [store_id]
@@ -83,16 +104,18 @@ def get_store_ids(user_id, role, store_id=None):
             return []
         return store_ids
 
+
 @reports_bp.route('/sales', methods=['GET'])
 @jwt_required()
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
-@cache.cached(timeout=300, key_prefix=lambda: f"sales_{get_jwt_identity()['id']}_{request.full_path}")
+@cache.cached(timeout=300, key_prefix=lambda: f"sales_{get_identity().get('id')}_{request.full_path}")
 def get_sales_report():
     """Fetch sales report with total quantity, revenue, and chart data for line graph."""
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Fetching sales report for user ID: {current_user_id}, role: {current_user_role}")
 
         period = request.args.get('period', 'weekly')
@@ -180,16 +203,18 @@ def get_sales_report():
         logger.error(f"Error fetching sales report for user ID {current_user_id}: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @reports_bp.route('/spoilage', methods=['GET'])
 @jwt_required()
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
-@cache.cached(timeout=300, key_prefix=lambda: f"spoilage_{get_jwt_identity()['id']}_{request.full_path}")
+@cache.cached(timeout=300, key_prefix=lambda: f"spoilage_{get_identity().get('id')}_{request.full_path}")
 def get_spoilage_report():
     """Fetch spoilage report with total value and chart data for pie chart (percentages by category)."""
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Fetching spoilage report for user ID: {current_user_id}, role: {current_user_role}")
 
         store_id = request.args.get('store_id', type=int)
@@ -261,7 +286,7 @@ def get_spoilage_report():
         total_spoilage_quantity = sum(cat.spoilage_quantity for cat in categories) or 1
         labels = [cat.category_name for cat in categories] or ['No Data']
         percentages = [(cat.spoilage_quantity / total_spoilage_quantity * 100) if total_spoilage_quantity > 0 else 0 for cat in categories]
-        colors = ['#f43f5e', '#fb7185', '#fecdd3', '#fed7aa', '#f97316'][:len(labels)] or ['#e11d48']
+        report_colors = ['#f43f5e', '#fb7185', '#fecdd3', '#fed7aa', '#f97316'][:len(labels)] or ['#e11d48']
 
         report_data = {
             'total_spoilage_value': float(total_spoilage_value),
@@ -270,8 +295,8 @@ def get_spoilage_report():
                 'datasets': [{
                     'label': 'Spoilage (%)',
                     'data': percentages,
-                    'backgroundColor': colors,
-                    'borderColor': colors
+                    'backgroundColor': report_colors,
+                    'borderColor': report_colors
                 }]
             }
         }
@@ -283,16 +308,18 @@ def get_spoilage_report():
         logger.error(f"Error fetching spoilage report for user ID {current_user_id}: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @reports_bp.route('/payment-status', methods=['GET'])
 @jwt_required()
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
-@cache.cached(timeout=300, key_prefix=lambda: f"payment_status_{get_jwt_identity()['id']}_{request.full_path}")
+@cache.cached(timeout=300, key_prefix=lambda: f"payment_status_{get_identity().get('id')}_{request.full_path}")
 def get_payment_status_report():
     """Fetch payment status report with paid/unpaid amounts and supplier data."""
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Fetching payment status report for user ID: {current_user_id}, role: {current_user_role}")
 
         store_id = request.args.get('store_id', type=int)
@@ -386,16 +413,18 @@ def get_payment_status_report():
         logger.error(f"Error fetching payment status report for user ID {current_user_id}: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @reports_bp.route('/top-products', methods=['GET'])
 @jwt_required()
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
-@cache.cached(timeout=300, key_prefix=lambda: f"top_products_{get_jwt_identity()['id']}_{request.full_path}")
+@cache.cached(timeout=300, key_prefix=lambda: f"top_products_{get_identity().get('id')}_{request.full_path}")
 def get_top_products():
     """Fetch top products report based on revenue."""
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Fetching top products report for user ID: {current_user_id}, role: {current_user_role}")
 
         store_id = request.args.get('store_id', type=int)
@@ -485,16 +514,18 @@ def get_top_products():
         logger.error(f"Error fetching top products report for user ID {current_user_id}: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @reports_bp.route('/dashboard/summary', methods=['GET'])
 @jwt_required()
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
-@cache.cached(timeout=300, key_prefix=lambda: f"dashboard_summary_{get_jwt_identity()['id']}_{request.full_path}")
+@cache.cached(timeout=300, key_prefix=lambda: f"dashboard_summary_{get_identity().get('id')}_{request.full_path}")
 def dashboard_summary():
     """Fetch dashboard summary with stock, sales, spoilage, and supplier payment data."""
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Fetching dashboard summary for user ID: {current_user_id}, role: {current_user_role}")
 
         store_id = request.args.get('store_id', type=int)
@@ -637,15 +668,17 @@ def dashboard_summary():
         logger.error(f"Error fetching dashboard summary for user ID {current_user_id}: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @reports_bp.route('/store-comparison', methods=['GET'])
 @jwt_required()
 @role_required([UserRole.MERCHANT])
-@cache.cached(timeout=300, key_prefix=lambda: f"store_comparison_{get_jwt_identity()['id']}_{request.full_path}")
+@cache.cached(timeout=300, key_prefix=lambda: f"store_comparison_{get_identity().get('id')}_{request.full_path}")
 def store_comparison():
     """Fetch store comparison report for revenue and spoilage."""
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
+        identity = get_identity()
+        current_user_id = identity.get('id')
         logger.info(f"Fetching store comparison report for user ID: {current_user_id}")
 
         start_date = request.args.get('start_date')
@@ -720,16 +753,18 @@ def store_comparison():
         logger.error(f"Error fetching store comparison report for user ID {current_user_id}: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @reports_bp.route('/clerk-performance', methods=['GET'])
 @jwt_required()
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
-@cache.cached(timeout=300, key_prefix=lambda: f"clerk_performance_{get_jwt_identity()['id']}_{request.full_path}")
+@cache.cached(timeout=300, key_prefix=lambda: f"clerk_performance_{get_identity().get('id')}_{request.full_path}")
 def clerk_performance():
     """Fetch clerk performance report with inventory and sales metrics."""
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Fetching clerk performance report for user ID: {current_user_id}, role: {current_user_role}")
 
         clerk_id = request.args.get('clerk_id', type=int)
@@ -817,15 +852,17 @@ def clerk_performance():
         logger.error(f"Error fetching clerk performance report for user ID {current_user_id}: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @reports_bp.route('/export', methods=['GET'])
 @jwt_required()
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
 def export_report():
     """Export report as PDF or Excel."""
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Exporting report for user ID: {current_user_id}, role: {current_user_role}")
 
         report_type = request.args.get('type')

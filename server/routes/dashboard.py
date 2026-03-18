@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime, timedelta
 from sqlalchemy import func
 from extensions import db
@@ -16,12 +16,30 @@ from models import (
     user_store
 )
 import logging
+import json
 
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/api/dashboard')
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def get_identity():
+    """
+    Safely decode JWT identity dict from JSON string subject.
+    Flask-JWT-Extended 4.x stores sub as a JSON string — this decodes it back to a dict.
+    """
+    raw = get_jwt().get('sub', '{}')
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except (ValueError, TypeError):
+            pass
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
 
 def _period_start(period: str):
     """Calculate the start date for the given period (weekly, monthly)."""
@@ -32,6 +50,7 @@ def _period_start(period: str):
     if period == 'monthly':
         return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     return now - timedelta(days=7)  # default weekly
+
 
 def get_period_dates(period, start, now):
     """Generate date intervals and labels for the given period."""
@@ -52,6 +71,7 @@ def get_period_dates(period, start, now):
             current += timedelta(days=1)
     return intervals, labels
 
+
 @dashboard_bp.route('/summary', methods=['GET'])
 @jwt_required()
 def summary():
@@ -63,21 +83,21 @@ def summary():
     Accepts ?period=weekly|monthly (default weekly) and ?store_id (optional for MERCHANT).
     Returns low_stock_products, top_products, and chart_data for sales and spoilage.
     """
-    identity = get_jwt_identity()
-    current_user = db.session.get(User, identity['id'])
+    identity = get_identity()
+    current_user = db.session.get(User, identity.get('id'))
     if not current_user:
-        logger.error(f"User not found: {identity['id']}")
+        logger.error(f"User not found: {identity.get('id')}")
         return jsonify({'status': 'error', 'message': 'User not found'}), 404
 
     role = current_user.role
     if role not in (UserRole.MERCHANT, UserRole.ADMIN, UserRole.CLERK):
-        logger.warning(f"Unauthorized role: {role} for user ID: {identity['id']}")
+        logger.warning(f"Unauthorized role: {role} for user ID: {identity.get('id')}")
         return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
 
     store_id = request.args.get('store_id', type=int)
     period = request.args.get('period', 'weekly')
     if period not in ('weekly', 'monthly'):
-        logger.warning(f"Invalid period: {period} for user ID: {identity['id']}")
+        logger.warning(f"Invalid period: {period} for user ID: {identity.get('id')}")
         return jsonify({'status': 'error', 'message': 'Invalid period, must be weekly or monthly'}), 400
 
     start = _period_start(period)
@@ -157,7 +177,7 @@ def summary():
     ).scalar() or 0
     logger.info(f"Total spoilage units for store IDs {store_ids}: {total_spoilage_units}")
 
-    # Adjust spoilage value to 1/8 of total sales
+    # Adjust spoilage value to 1/20 of total sales
     total_spoilage_value = total_sales / 20.0
     logger.info(f"Adjusted spoilage value for store IDs {store_ids}: {total_spoilage_value}")
 

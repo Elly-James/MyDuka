@@ -1,6 +1,6 @@
 from datetime import datetime
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import get_jwt_identity, jwt_required
+from flask_jwt_extended import get_jwt, jwt_required
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import selectinload
 from extensions import db, socketio
@@ -9,18 +9,36 @@ from schemas import UserSchema
 from sqlalchemy import or_
 from marshmallow import ValidationError
 import logging
+import json
 from functools import wraps
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+
+def get_identity():
+    """
+    Safely decode JWT identity dict from JSON string subject.
+    Flask-JWT-Extended 4.x stores sub as a JSON string — this decodes it back to a dict.
+    """
+    raw = get_jwt().get('sub', '{}')
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except (ValueError, TypeError):
+            pass
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
 # Role-based authorization decorator
 def role_required(allowed_roles):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            identity = get_jwt_identity()
+            identity = get_identity()
             current_user_role = identity.get('role')
             if not current_user_role or UserRole[current_user_role] not in allowed_roles:
                 logger.warning(f"Unauthorized access attempt by user ID: {identity.get('id')} with role: {current_user_role}")
@@ -29,29 +47,32 @@ def role_required(allowed_roles):
         return decorated_function
     return decorator
 
+
 users_bp = Blueprint('users', __name__, url_prefix='/api/users')
 
 user_schema = UserSchema()
 users_schema = UserSchema(many=True)
 
+
 def get_current_user():
     """Helper function to get the current user from the JWT identity"""
-    identity = get_jwt_identity()
-    return db.session.query(User).options(selectinload(User.stores)).get(identity['id'])
+    identity = get_identity()
+    return db.session.query(User).options(selectinload(User.stores)).get(identity.get('id'))
+
 
 def build_user_query(current_user_id, role=None, search=None, store_id=None):
     """Helper function to build common user queries"""
     query = db.session.query(User).options(selectinload(User.stores))
-    
+
     if role:
         query = query.filter(User.role == role)
-    
+
     if current_user_id:
         query = query.filter(User.id != current_user_id)
-    
+
     if search or store_id:
         query = query.join(user_store, isouter=True).join(Store, isouter=True)
-    
+
     if search:
         search_term = f'%{search.lower()}%'
         query = query.filter(or_(
@@ -59,11 +80,12 @@ def build_user_query(current_user_id, role=None, search=None, store_id=None):
             User.email.ilike(search_term),
             Store.name.ilike(search_term)
         ))
-    
+
     if store_id:
         query = query.filter(Store.id == store_id)
-    
+
     return query
+
 
 @users_bp.route('', methods=['GET'])
 @jwt_required()
@@ -82,36 +104,37 @@ def get_users():
         - 403: Unauthorized (non-merchant user)
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
+        identity = get_identity()
+        current_user_id = identity.get('id')
         logger.debug(f"Fetching users for user ID: {current_user_id}")
-        
+
         role = request.args.get('role', '').strip().upper()
         search = request.args.get('search', '').strip()
         page = max(1, request.args.get('page', 1, type=int))
         per_page = max(1, request.args.get('per_page', 10, type=int))
-        
+
         query = build_user_query(current_user_id)
-        
+
         if role:
             try:
                 query = query.filter(User.role == UserRole[role])
             except KeyError:
                 logger.error(f"Invalid role parameter: {role}")
                 return jsonify({'status': 'error', 'message': 'Invalid role'}), 400
-        
+
         if search:
             search_term = f'%{search.lower()}%'
             query = query.filter(or_(
                 User.name.ilike(search_term),
                 User.email.ilike(search_term)
             ))
-        
+
         total = query.count()
         pages = (total + per_page - 1) // per_page
         users = query.order_by(User.name.asc()).offset((page - 1) * per_page).limit(per_page).all()
-        
+
         logger.info(f"Retrieved {len(users)} users for user ID: {current_user_id}")
         return jsonify({
             'status': 'success',
@@ -129,6 +152,7 @@ def get_users():
         logger.error(f"Error fetching users for user ID {current_user_id}: {type(e).__name__} - {str(e)}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @users_bp.route('/admins', methods=['GET'])
 @jwt_required()
 @role_required([UserRole.MERCHANT])
@@ -145,23 +169,24 @@ def get_admins():
         - 403: Unauthorized (non-merchant user or store access)
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
+        identity = get_identity()
+        current_user_id = identity.get('id')
         logger.debug(f"Fetching admins for user ID: {current_user_id}")
-        
+
         search = request.args.get('search', '').strip()
         store_id = request.args.get('store_id', None, type=int)
         page = max(1, request.args.get('page', 1, type=int))
         per_page = max(1, request.args.get('per_page', 10, type=int))
-        
+
         query = build_user_query(
             current_user_id,
             role=UserRole.ADMIN,
             search=search,
             store_id=store_id
         )
-        
+
         if store_id:
             has_access = db.session.query(user_store).filter(
                 user_store.c.user_id == current_user_id,
@@ -170,11 +195,11 @@ def get_admins():
             if not has_access:
                 logger.warning(f"Unauthorized store access: store_id {store_id} by user ID: {current_user_id}")
                 return jsonify({'status': 'error', 'message': 'Unauthorized access to store'}), 403
-        
+
         total = query.count()
         pages = (total + per_page - 1) // per_page
         admins = query.order_by(User.name.asc()).offset((page - 1) * per_page).limit(per_page).all()
-        
+
         logger.info(f"Retrieved {len(admins)} admins for user ID: {current_user_id}")
         return jsonify({
             'status': 'success',
@@ -192,6 +217,7 @@ def get_admins():
         logger.error(f"Error fetching admins for user ID {current_user_id}: {type(e).__name__} - {str(e)}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @users_bp.route('/clerks', methods=['GET'])
 @jwt_required()
 @role_required([UserRole.ADMIN, UserRole.MERCHANT])
@@ -207,22 +233,23 @@ def get_clerks():
         - 403: Unauthorized (store access for merchants)
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = UserRole[identity['role']]
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = UserRole[identity.get('role')]
         logger.debug(f"Fetching clerks for user ID: {current_user_id}")
-        
+
         search = request.args.get('search', '').strip()
         page = max(1, request.args.get('page', 1, type=int))
         per_page = max(1, request.args.get('per_page', 10, type=int))
-        
+
         query = build_user_query(
             current_user_id,
             role=UserRole.CLERK,
             search=search
         )
-        
+
         if current_user_role == UserRole.MERCHANT:
             query = query.join(user_store).filter(
                 user_store.c.store_id.in_(
@@ -231,11 +258,11 @@ def get_clerks():
                     )
                 )
             )
-        
+
         total = query.count()
         pages = (total + per_page - 1) // per_page
         clerks = query.order_by(User.name.asc()).offset((page - 1) * per_page).limit(per_page).all()
-        
+
         logger.info(f"Retrieved {len(clerks)} clerks for user ID: {current_user_id}")
         return jsonify({
             'status': 'success',
@@ -252,6 +279,7 @@ def get_clerks():
     except Exception as e:
         logger.error(f"Error fetching clerks for user ID {current_user_id}: {type(e).__name__} - {str(e)}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+
 
 @users_bp.route('/<int:user_id>', methods=['PUT'])
 @jwt_required()
@@ -272,13 +300,14 @@ def update_user(user_id):
         - 409: Email already in use
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = UserRole[identity['role']]
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = UserRole[identity.get('role')]
         data = request.get_json() or {}
         logger.info(f"Updating user ID {user_id} by user ID: {current_user_id}")
-        
+
         if not data or not any(k in data for k in ('name', 'email', 'store_ids')):
             logger.error(f"Missing required fields in update request by user ID: {current_user_id}")
             return jsonify({'status': 'error', 'message': 'Name, email, or store_ids required'}), 400
@@ -328,7 +357,7 @@ def update_user(user_id):
 
                 user.updated_at = datetime.utcnow()
                 db.session.flush()
-                
+
                 notification = Notification(
                     user_id=user_id,
                     message=f"Your account details have been updated by {current_user.name}.",
@@ -374,6 +403,7 @@ def update_user(user_id):
         logger.error(f"Error updating user ID {user_id}: {type(e).__name__} - {str(e)}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @users_bp.route('/<int:user_id>/status', methods=['PUT'])
 @jwt_required()
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
@@ -390,10 +420,11 @@ def update_user_status(user_id):
         - 404: User not found
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = UserRole[identity['role']]
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = UserRole[identity.get('role')]
         data = request.get_json() or {}
         logger.info(f"Updating status for user ID {user_id} by user ID: {current_user_id}")
 
@@ -436,7 +467,7 @@ def update_user_status(user_id):
                 user.status = new_status
                 user.updated_at = datetime.utcnow()
                 db.session.flush()
-                
+
                 current_user = get_current_user()
                 if not current_user:
                     logger.error(f"Current user ID {current_user_id} not found")
@@ -479,6 +510,7 @@ def update_user_status(user_id):
         logger.error(f"Error updating user ID {user_id} status: {type(e).__name__} - {str(e)}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @users_bp.route('/<int:user_id>', methods=['DELETE'])
 @jwt_required()
 @role_required([UserRole.MERCHANT, UserRole.ADMIN])
@@ -492,10 +524,11 @@ def delete_user(user_id):
         - 404: User not found
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = UserRole[identity['role']]
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = UserRole[identity.get('role')]
         logger.info(f"Deleting user ID {user_id} by user ID: {current_user_id}")
 
         user = db.session.query(User).options(selectinload(User.stores)).get(user_id)

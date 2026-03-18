@@ -1,8 +1,9 @@
 import os
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime
 import logging
+import json
 
 from extensions import db, socketio
 from models import Notification, User, NotificationType
@@ -16,6 +17,23 @@ logger = logging.getLogger(__name__)
 
 notification_schema = NotificationSchema(many=True)
 single_notification_schema = NotificationSchema()
+
+
+def get_identity():
+    """
+    Safely decode JWT identity dict from JSON string subject.
+    Flask-JWT-Extended 4.x stores sub as a JSON string — this decodes it back to a dict.
+    """
+    raw = get_jwt().get('sub', '{}')
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except (ValueError, TypeError):
+            pass
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
 
 @notifications_bp.route('', methods=['GET'])
 @jwt_required()
@@ -32,10 +50,11 @@ def get_notifications():
         - 404: User not found
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Fetching notifications for user ID: {current_user_id}, role: {current_user_role}")
 
         if current_user_role != 'MERCHANT':
@@ -79,6 +98,7 @@ def get_notifications():
         logger.error(f"Error in get_notifications for user ID {current_user_id}: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @notifications_bp.route('/<int:id>/read', methods=['PUT'])
 @jwt_required()
 def mark_notification_read(id):
@@ -90,10 +110,11 @@ def mark_notification_read(id):
         - 404: Notification or user not found
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Marking notification ID {id} as read for user ID: {current_user_id}, role: {current_user_role}")
 
         if current_user_role != 'MERCHANT':
@@ -149,6 +170,7 @@ def mark_notification_read(id):
         logger.error(f"Error in mark_notification_read for notification ID {id} by user ID {current_user_id}: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @notifications_bp.route('/mark-all-read', methods=['PUT'])
 @jwt_required()
 def mark_all_notifications_read():
@@ -160,10 +182,11 @@ def mark_all_notifications_read():
         - 404: User not found
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Marking all notifications as read for user ID: {current_user_id}, role: {current_user_role}")
 
         if current_user_role != 'MERCHANT':
@@ -213,6 +236,7 @@ def mark_all_notifications_read():
         logger.error(f"Error in mark_all_notifications_read for user ID {current_user_id}: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @notifications_bp.route('/<int:id>', methods=['DELETE'])
 @jwt_required()
 def delete_notification(id):
@@ -224,10 +248,11 @@ def delete_notification(id):
         - 404: Notification or user not found
         - 500: Internal server error
     """
+    current_user_id = None
     try:
-        identity = get_jwt_identity()
-        current_user_id = identity['id']
-        current_user_role = identity['role']
+        identity = get_identity()
+        current_user_id = identity.get('id')
+        current_user_role = identity.get('role')
         logger.info(f"Deleting notification ID {id} for user ID: {current_user_id}, role: {current_user_role}")
 
         if current_user_role != 'MERCHANT':

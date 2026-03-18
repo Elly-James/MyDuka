@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime, timedelta
 import logging
+import json
 
 from extensions import db, socketio
 from models import (
@@ -16,14 +17,31 @@ inventory_bp = Blueprint('inventory', __name__, url_prefix='/api/inventory')
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def get_identity():
+    """
+    Safely decode JWT identity dict from JSON string subject.
+    Flask-JWT-Extended 4.x stores sub as a JSON string — this decodes it back to a dict.
+    """
+    raw = get_jwt().get('sub', '{}')
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except (ValueError, TypeError):
+            pass
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
 def get_store_ids(user_id, role, store_id=None):
     """Get accessible store IDs for the user based on their role."""
     user = db.session.get(User, user_id)
     if not user:
         return []
-    
+
     store_ids = [store.id for store in user.stores]
-    
+
     if role == UserRole.MERCHANT:
         if store_id and store_id in store_ids:
             return [store_id]
@@ -32,6 +50,7 @@ def get_store_ids(user_id, role, store_id=None):
         if store_id and store_id not in store_ids:
             return []
         return store_ids
+
 
 def get_period_dates(period):
     """Helper function to get date ranges for reporting periods, aligned with reports.py."""
@@ -49,6 +68,7 @@ def get_period_dates(period):
         start = start.replace(hour=0, minute=0, second=0, microsecond=0)
         end = today
     return start, end
+
 
 @inventory_bp.route('/products', methods=['GET', 'POST'])
 @jwt_required()
@@ -72,8 +92,8 @@ def manage_products():
         - unit_price (float): Unit price
     """
     try:
-        identity = get_jwt_identity()
-        current_user = db.session.get(User, identity['id'])
+        identity = get_identity()
+        current_user = db.session.get(User, identity.get('id'))
         if not current_user:
             logger.error("User not found for identity: %s", identity)
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
@@ -234,6 +254,7 @@ def manage_products():
         logger.error("Error in manage_products for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @inventory_bp.route('/entries', methods=['GET', 'POST'])
 @jwt_required()
 def manage_entries():
@@ -261,8 +282,8 @@ def manage_entries():
         - category_id (int, optional): Category ID
     """
     try:
-        identity = get_jwt_identity()
-        current_user = db.session.get(User, identity['id'])
+        identity = get_identity()
+        current_user = db.session.get(User, identity.get('id'))
         if not current_user:
             logger.error("User not found for identity: %s", identity)
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
@@ -490,6 +511,7 @@ def manage_entries():
         logger.error("Error in manage_entries for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @inventory_bp.route('/entries/<int:entry_id>', methods=['PUT', 'DELETE'])
 @jwt_required()
 def modify_entry(entry_id):
@@ -508,8 +530,8 @@ def modify_entry(entry_id):
         - category_id (int, optional): Updated category ID
     """
     try:
-        identity = get_jwt_identity()
-        current_user = db.session.get(User, identity['id'])
+        identity = get_identity()
+        current_user = db.session.get(User, identity.get('id'))
         if not current_user:
             logger.error("User not found for identity: %s", identity)
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
@@ -731,6 +753,7 @@ def modify_entry(entry_id):
         logger.error("Error in modify_entry for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @inventory_bp.route('/supply-requests', methods=['GET', 'POST'])
 @jwt_required()
 def manage_supply_requests():
@@ -749,8 +772,8 @@ def manage_supply_requests():
         - quantity_requested (int): Quantity requested
     """
     try:
-        identity = get_jwt_identity()
-        current_user = db.session.get(User, identity['id'])
+        identity = get_identity()
+        current_user = db.session.get(User, identity.get('id'))
         if not current_user:
             logger.error("User not found for identity: %s", identity)
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
@@ -913,6 +936,7 @@ def manage_supply_requests():
         logger.error("Error in manage_supply_requests for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @inventory_bp.route('/supply-requests/<int:request_id>/approve', methods=['PUT'])
 @jwt_required()
 def approve_supply_request(request_id):
@@ -920,8 +944,8 @@ def approve_supply_request(request_id):
     Approve a supply request (admin only).
     """
     try:
-        identity = get_jwt_identity()
-        current_user = db.session.get(User, identity['id'])
+        identity = get_identity()
+        current_user = db.session.get(User, identity.get('id'))
         if not current_user or current_user.role != UserRole.ADMIN:
             logger.warning("Unauthorized supply request approval attempt by user ID: %s, role: %s",
                            identity.get('id', 'unknown'), current_user.role.name if current_user else 'none')
@@ -952,9 +976,9 @@ def approve_supply_request(request_id):
             request_obj.status = RequestStatus.APPROVED
             request_obj.admin_id = current_user.id
             request_obj.approval_date = datetime.utcnow()
-            
+
             clerk = db.session.get(User, request_obj.clerk_id)
-            
+
             # Notify the clerk
             notification = Notification(
                 user_id=clerk.id,
@@ -965,7 +989,7 @@ def approve_supply_request(request_id):
             )
             db.session.add(notification)
             db.session.flush()
-            
+
             # Send real-time update to clerk
             socketio.emit('supply_request_status', {
                 'request_id': request_obj.id,
@@ -998,6 +1022,7 @@ def approve_supply_request(request_id):
         logger.error("Error in approve_supply_request for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @inventory_bp.route('/supply-requests/<int:request_id>/decline', methods=['PUT'])
 @jwt_required()
 def decline_supply_request(request_id):
@@ -1007,8 +1032,8 @@ def decline_supply_request(request_id):
         - decline_reason (str): Reason for declining
     """
     try:
-        identity = get_jwt_identity()
-        current_user = db.session.get(User, identity['id'])
+        identity = get_identity()
+        current_user = db.session.get(User, identity.get('id'))
         if not current_user or current_user.role != UserRole.ADMIN:
             logger.warning("Unauthorized supply request decline attempt by user ID: %s, role: %s",
                            identity.get('id', 'unknown'), current_user.role.name if current_user else 'none')
@@ -1045,9 +1070,9 @@ def decline_supply_request(request_id):
             request_obj.admin_id = current_user.id
             request_obj.decline_reason = data['decline_reason']
             request_obj.updated_at = datetime.utcnow()
-            
+
             clerk = db.session.get(User, request_obj.clerk_id)
-            
+
             # Notify the clerk
             notification = Notification(
                 user_id=clerk.id,
@@ -1058,7 +1083,7 @@ def decline_supply_request(request_id):
             )
             db.session.add(notification)
             db.session.flush()
-            
+
             # Send real-time update to clerk
             socketio.emit('supply_request_status', {
                 'request_id': request_obj.id,
@@ -1092,6 +1117,7 @@ def decline_supply_request(request_id):
         logger.error("Error in decline_supply_request for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @inventory_bp.route('/update-payment', methods=['PUT'])
 @jwt_required()
 def update_payment():
@@ -1101,8 +1127,8 @@ def update_payment():
         - entry_ids (list of int): List of inventory entry IDs to update
     """
     try:
-        identity = get_jwt_identity()
-        current_user = db.session.get(User, identity['id'])
+        identity = get_identity()
+        current_user = db.session.get(User, identity.get('id'))
         if not current_user or current_user.role not in [UserRole.MERCHANT, UserRole.ADMIN]:
             logger.warning("Unauthorized payment update attempt by user ID: %s, role: %s",
                            identity.get('id', 'unknown'), current_user.role.name if current_user else 'none')
@@ -1185,6 +1211,7 @@ def update_payment():
         logger.error("Error in update_payment for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @inventory_bp.route('/low-stock', methods=['GET'])
 @jwt_required()
 def low_stock():
@@ -1194,8 +1221,8 @@ def low_stock():
         - store_id (int, optional): Filter by store ID
     """
     try:
-        identity = get_jwt_identity()
-        current_user = db.session.get(User, identity['id'])
+        identity = get_identity()
+        current_user = db.session.get(User, identity.get('id'))
         if not current_user:
             logger.error("User not found for identity: %s", identity)
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
@@ -1235,6 +1262,7 @@ def low_stock():
         logger.error("Error in low_stock for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @inventory_bp.route('/non-low-stock', methods=['GET'])
 @jwt_required()
 def non_low_stock():
@@ -1244,8 +1272,8 @@ def non_low_stock():
         - store_id (int, optional): Filter by store ID
     """
     try:
-        identity = get_jwt_identity()
-        current_user = db.session.get(User, identity['id'])
+        identity = get_identity()
+        current_user = db.session.get(User, identity.get('id'))
         if not current_user:
             logger.error("User not found for identity: %s", identity)
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
@@ -1290,6 +1318,7 @@ def non_low_stock():
         logger.error("Error in non_low_stock for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @inventory_bp.route('/suppliers/<status>', methods=['GET'])
 @jwt_required()
 def get_suppliers(status):
@@ -1301,8 +1330,8 @@ def get_suppliers(status):
         - search (str, optional): Filter by supplier or product name
     """
     try:
-        identity = get_jwt_identity()
-        current_user = db.session.get(User, identity['id'])
+        identity = get_identity()
+        current_user = db.session.get(User, identity.get('id'))
         if not current_user:
             logger.error("User not found for identity: %s", identity)
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
@@ -1380,6 +1409,7 @@ def get_suppliers(status):
         logger.error("Error in get_suppliers (%s) for user ID: %s: %s", status, identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @inventory_bp.route('/suppliers', methods=['GET'])
 @jwt_required()
 def get_all_suppliers():
@@ -1391,8 +1421,8 @@ def get_all_suppliers():
         - per_page (int, optional): Items per page (default 20)
     """
     try:
-        identity = get_jwt_identity()
-        current_user = db.session.get(User, identity['id'])
+        identity = get_identity()
+        current_user = db.session.get(User, identity.get('id'))
         if not current_user:
             logger.error("User not found for identity: %s", identity)
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
@@ -1437,6 +1467,7 @@ def get_all_suppliers():
         logger.error("Error in get_all_suppliers for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @inventory_bp.route('/products/search', methods=['GET'])
 @jwt_required()
 def search_products():
@@ -1446,8 +1477,8 @@ def search_products():
         - q (str): Search term
     """
     try:
-        identity = get_jwt_identity()
-        current_user = db.session.get(User, identity['id'])
+        identity = get_identity()
+        current_user = db.session.get(User, identity.get('id'))
         if not current_user:
             logger.error("User not found for identity: %s", identity)
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
@@ -1500,6 +1531,7 @@ def search_products():
         logger.error("Error in search_products for user ID: %s: %s", identity.get('id', 'unknown'), str(e))
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
+
 @inventory_bp.route('/activity-logs', methods=['GET'])
 @jwt_required()
 def get_activity_logs():
@@ -1507,8 +1539,8 @@ def get_activity_logs():
     Get activity logs for the current user.
     """
     try:
-        identity = get_jwt_identity()
-        current_user = db.session.get(User, identity['id'])
+        identity = get_identity()
+        current_user = db.session.get(User, identity.get('id'))
         if not current_user:
             logger.error("User not found for identity: %s", identity)
             return jsonify({'status': 'error', 'message': 'User not found'}), 404
