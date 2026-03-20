@@ -5,6 +5,7 @@ import SideBar from './SideBar';
 import NavBar from '../NavBar/NavBar';
 import './merchant.css';
 import debounce from 'lodash/debounce';
+import Footer from '../Footer/Footer';
 
 const AdminManagement = () => {
   const [admins, setAdmins] = useState([]);
@@ -587,8 +588,11 @@ const AdminManagement = () => {
               </div>
             </div>
 
-          </div>{/* /card */}
+         </div>{/* /card */}
         </div>{/* /page-content */}
+
+        <Footer />
+
       </div>{/* /main-content */}
     </div>
   );

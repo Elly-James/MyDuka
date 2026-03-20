@@ -18,6 +18,7 @@ import { jsPDF } from 'jspdf';
 import useSocket from '../hooks/useSocket';
 import SideBar from './SideBar';
 import NavBar from '../NavBar/NavBar';
+import Footer from '../Footer/Footer';
 import './merchant.css';
 
 ChartJS.register(
@@ -413,6 +414,7 @@ const StoreReports = () => {
 
           </div>{/* /card */}
         </div>{/* /page-content */}
+        <Footer />
       </div>{/* /main-content */}
     </div>
   );

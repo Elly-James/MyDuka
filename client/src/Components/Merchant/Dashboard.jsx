@@ -16,6 +16,7 @@ import useSocket from '../hooks/useSocket';
 import SideBar from './SideBar';
 import NavBar from '../NavBar/NavBar';
 import './merchant.css';
+import Footer from '../Footer/Footer';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -365,6 +366,7 @@ const Dashboard = () => {
           </div>
 
         </div>{/* /page-content */}
+        <Footer />
       </div>{/* /main-content */}
     </div>
   );

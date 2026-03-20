@@ -4,6 +4,7 @@ import useSocket from '../hooks/useSocket';
 import SideBar from './SideBar';
 import NavBar from '../NavBar/NavBar';
 import './merchant.css';
+import Footer from '../Footer/Footer';
 
 const PaymentTracking = () => {
   const [suppliers, setSuppliers] = useState([]);
@@ -360,6 +361,7 @@ const PaymentTracking = () => {
 
           </div>{/* /card */}
         </div>{/* /page-content */}
+        <Footer />
       </div>{/* /main-content */}
     </div>
   );
