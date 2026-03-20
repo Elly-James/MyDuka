@@ -250,296 +250,346 @@ const AdminManagement = () => {
   };
 
   return (
-    <div className="merchant-container flex min-h-screen bg-gray-100">
+    <div className="merchant-container">
       <SideBar />
-      <div className="main-content flex-1 p-6">
-        <NavBar />
-        {error && (
-          <p className="text-red-500 mb-4 bg-red-100 p-3 rounded">{error}</p>
-        )}
-        {success && (
-          <p className="text-green-500 mb-4 bg-green-100 p-3 rounded">{success}</p>
-        )}
-        {loading && (
-          <p className="text-gray-500 bg-gray-100 p-3 rounded">Loading...</p>
-        )}
 
-        <div className="card bg-white p-6 rounded-lg shadow">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="card-title text-2xl font-bold">Admin Management</h2>
-            <div className="flex gap-4">
-              <input
-                type="text"
-                placeholder="Search admins by name, email, or store..."
-                onChange={(e) => debouncedSearch(e.target.value)}
-                className="p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-              <button
-                onClick={() => setShowInviteModal(true)}
-                className="button px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-              >
-                + Invite Admin
-              </button>
-            </div>
+      <div className="main-content">
+        <NavBar />
+
+        <div className="page-content">
+
+          {/* ── Alerts ── */}
+          {error && <div className="alert alert-error">{error}</div>}
+          {success && <div className="alert alert-success">{success}</div>}
+          {loading && <div className="alert alert-info">Loading...</div>}
+
+          {/* ── Page Header ── */}
+          <div className="dashboard-header">
+            <h1 className="dashboard-title">Admin Management</h1>
+            <p className="dashboard-subtitle">
+              Manage your store administrators and their access.
+            </p>
           </div>
 
-          {showInviteModal && (
-            <div className="modal-overlay fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-              <div className="modal-content bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-                <h3 className="modal-title text-xl font-bold mb-4">Invite New Admin</h3>
-                <form onSubmit={handleInvite} className="invite-form space-y-4">
-                  <div className="form-group">
-                    <label htmlFor="name" className="form-label text-gray-700">
-                      Name
-                    </label>
-                    <input
-                      type="text"
-                      id="name"
-                      value={inviteForm.name}
-                      onChange={(e) =>
-                        setInviteForm({ ...inviteForm, name: e.target.value })
-                      }
-                      className="form-input p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      placeholder="Enter admin name"
-                      required
+          {/* ── Main Card ── */}
+          <div className="card">
+
+            {/* Card header: title + search + invite button */}
+            <div className="card-header">
+              <h2 className="card-title">Administrators</h2>
+              <div className="toolbar" style={{ margin: 0 }}>
+                <div className="search-wrapper">
+                  <svg
+                    className="search-icon"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                     />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="email" className="form-label text-gray-700">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      id="email"
-                      value={inviteForm.email}
-                      onChange={(e) =>
-                        setInviteForm({ ...inviteForm, email: e.target.value })
-                      }
-                      className="form-input p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      placeholder="Enter admin email"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="store_id" className="form-label text-gray-700">
-                      Store
-                    </label>
-                    <select
-                      id="store_id"
-                      value={inviteForm.store_id}
-                      onChange={(e) =>
-                        setInviteForm({ ...inviteForm, store_id: e.target.value })
-                      }
-                      className="form-input p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      required
-                    >
-                      <option value="">Select a store</option>
-                      {stores.map((store) => (
-                        <option key={store.id} value={store.id}>
-                          {store.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="modal-actions flex gap-4">
-                    <button
-                      type="submit"
-                      className="button px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                      disabled={actionLoading.invite}
-                    >
-                      {actionLoading.invite ? 'Sending...' : 'Send Invite'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setInviteForm({ name: '', email: '', store_id: '' });
-                        setShowInviteModal(false);
-                      }}
-                      className="button px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search admins by name, email, or store..."
+                    onChange={(e) => debouncedSearch(e.target.value)}
+                  />
+                </div>
+                <button
+                  onClick={() => setShowInviteModal(true)}
+                  className="button btn-primary"
+                >
+                  + Invite Admin
+                </button>
               </div>
             </div>
-          )}
 
-          <table className="table w-full mb-6 border-collapse">
-            <thead>
-              <tr className="bg-gray-200">
-                <th className="p-3 text-left">Name</th>
-                <th className="p-3 text-left">Email</th>
-                <th className="p-3 text-left">Stores</th>
-                <th className="p-3 text-left">Status</th>
-                <th className="p-3 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {admins.length > 0 ? (
-                admins.map((admin) => (
-                  <tr key={admin.id} className="border-b">
-                    <td className="p-3">
-                      {editForm && editForm.id === admin.id ? (
-                        <input
-                          type="text"
-                          value={editForm.name}
-                          onChange={(e) =>
-                            setEditForm({ ...editForm, name: e.target.value })
-                          }
-                          className="p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          required
-                        />
-                      ) : (
-                        admin.name
-                      )}
-                    </td>
-                    <td className="p-3">
-                      {editForm && editForm.id === admin.id ? (
-                        <input
-                          type="email"
-                          value={editForm.email}
-                          onChange={(e) =>
-                            setEditForm({ ...editForm, email: e.target.value })
-                          }
-                          className="p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          required
-                        />
-                      ) : (
-                        admin.email
-                      )}
-                    </td>
-                    <td className="p-3">
-                      {editForm && editForm.id === admin.id ? (
-                        <select
-                          multiple
-                          value={editForm.store_ids}
-                          onChange={(e) =>
-                            setEditForm({
-                              ...editForm,
-                              store_ids: Array.from(
-                                e.target.selectedOptions,
-                                (option) => parseInt(option.value)
-                              ),
-                            })
-                          }
-                          className="p-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                          {stores.map((store) => (
-                            <option key={store.id} value={store.id}>
-                              {store.name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        admin.stores?.map((store) => store.name).join(', ') || 'N/A'
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <span
-                        className={`status-badge px-2 py-1 rounded-full text-sm ${
-                          admin.status === 'ACTIVE'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
+            {/* ── Invite Modal ── */}
+            {showInviteModal && (
+              <div
+                className="modal-overlay"
+                onClick={(e) => e.target === e.currentTarget && setShowInviteModal(false)}
+              >
+                <div className="modal-content">
+                  <h3 className="modal-title">Invite New Admin</h3>
+
+                  <form onSubmit={handleInvite}>
+                    <div className="form-group">
+                      <label htmlFor="invite-name" className="form-label">
+                        Name
+                      </label>
+                      <input
+                        type="text"
+                        id="invite-name"
+                        value={inviteForm.name}
+                        onChange={(e) =>
+                          setInviteForm({ ...inviteForm, name: e.target.value })
+                        }
+                        placeholder="Enter admin name"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="invite-email" className="form-label">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        id="invite-email"
+                        value={inviteForm.email}
+                        onChange={(e) =>
+                          setInviteForm({ ...inviteForm, email: e.target.value })
+                        }
+                        placeholder="Enter admin email"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="invite-store" className="form-label">
+                        Store
+                      </label>
+                      <select
+                        id="invite-store"
+                        value={inviteForm.store_id}
+                        onChange={(e) =>
+                          setInviteForm({ ...inviteForm, store_id: e.target.value })
+                        }
+                        required
                       >
-                        {admin.status}
-                      </span>
-                    </td>
-                    <td className="p-3 space-x-2">
-                      {editForm && editForm.id === admin.id ? (
-                        <>
-                          <button
-                            onClick={handleEditSubmit}
-                            className="button-action px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                            disabled={actionLoading[admin.id]}
-                          >
-                            {actionLoading[admin.id] ? 'Saving...' : 'Save'}
-                          </button>
-                          <button
-                            onClick={() => setEditForm(null)}
-                            className="button-action px-3 py-1 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => handleStatusToggle(admin.id, admin.status)}
-                            className="button-action px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                            disabled={actionLoading[admin.id]}
-                          >
-                            {actionLoading[admin.id]
-                              ? 'Processing...'
-                              : admin.status === 'ACTIVE'
-                              ? 'Deactivate'
-                              : 'Activate'}
-                          </button>
-                          <button
-                            onClick={() => handleEdit(admin)}
-                            className="button-action px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                            disabled={actionLoading[admin.id]}
-                            title="Edit Admin"
-                          >
-                            {actionLoading[admin.id] ? 'Processing...' : '✏️'}
-                          </button>
-                          <button
-                            onClick={() => handleDelete(admin.id)}
-                            className="button-action px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                            disabled={actionLoading[admin.id]}
-                            title="Delete Admin"
-                          >
-                            {actionLoading[admin.id] ? 'Processing...' : '🗑️'}
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="5" className="text-center text-gray-500 p-3">
-                    No admins found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                        <option value="">Select a store</option>
+                        {stores.map((store) => (
+                          <option key={store.id} value={store.id}>
+                            {store.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-          <div className="flex justify-between items-center mt-4">
-            <button
-              className="pagination-button px-3 py-1 rounded-lg bg-gray-200 text-gray-700 disabled:opacity-50"
-              onClick={() => paginate(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </button>
-            <div className="flex gap-2">
-              {Array.from({ length: totalPages }, (_, i) => (
-                <button
-                  key={i + 1}
-                  className={`pagination-button px-3 py-1 rounded-lg ${
-                    currentPage === i + 1
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-gray-200 text-gray-700'
-                  }`}
-                  onClick={() => paginate(i + 1)}
-                >
-                  {i + 1}
-                </button>
-              ))}
+                    <div className="modal-actions">
+                      <button
+                        type="button"
+                        className="button btn-ghost"
+                        onClick={() => {
+                          setInviteForm({ name: '', email: '', store_id: '' });
+                          setShowInviteModal(false);
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="button btn-primary"
+                        disabled={actionLoading.invite}
+                      >
+                        {actionLoading.invite ? 'Sending...' : 'Send Invite'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* ── Admins Table ── */}
+            <div className="table-wrapper">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Stores</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {admins.length > 0 ? (
+                    admins.map((admin) => (
+                      <tr key={admin.id}>
+
+                        {/* Name cell — editable */}
+                        <td>
+                          {editForm && editForm.id === admin.id ? (
+                            <input
+                              type="text"
+                              value={editForm.name}
+                              onChange={(e) =>
+                                setEditForm({ ...editForm, name: e.target.value })
+                              }
+                              required
+                            />
+                          ) : (
+                            <span style={{ fontWeight: 500 }}>{admin.name}</span>
+                          )}
+                        </td>
+
+                        {/* Email cell — editable */}
+                        <td>
+                          {editForm && editForm.id === admin.id ? (
+                            <input
+                              type="email"
+                              value={editForm.email}
+                              onChange={(e) =>
+                                setEditForm({ ...editForm, email: e.target.value })
+                              }
+                              required
+                            />
+                          ) : (
+                            <span className="text-muted">{admin.email}</span>
+                          )}
+                        </td>
+
+                        {/* Stores cell — editable (multi-select) */}
+                        <td>
+                          {editForm && editForm.id === admin.id ? (
+                            <select
+                              multiple
+                              value={editForm.store_ids}
+                              onChange={(e) =>
+                                setEditForm({
+                                  ...editForm,
+                                  store_ids: Array.from(
+                                    e.target.selectedOptions,
+                                    (option) => parseInt(option.value)
+                                  ),
+                                })
+                              }
+                            >
+                              {stores.map((store) => (
+                                <option key={store.id} value={store.id}>
+                                  {store.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="text-muted">
+                              {admin.stores?.map((store) => store.name).join(', ') || 'N/A'}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Status badge */}
+                        <td>
+                          <span
+                            className={`status-badge ${
+                              admin.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'
+                            }`}
+                          >
+                            {admin.status}
+                          </span>
+                        </td>
+
+                        {/* Actions */}
+                        <td>
+                          <div className="action-group">
+                            {editForm && editForm.id === admin.id ? (
+                              <>
+                                <button
+                                  onClick={handleEditSubmit}
+                                  className="button-action btn-action-success"
+                                  disabled={actionLoading[admin.id]}
+                                >
+                                  {actionLoading[admin.id] ? 'Saving...' : 'Save'}
+                                </button>
+                                <button
+                                  onClick={() => setEditForm(null)}
+                                  className="button-action btn-action-ghost"
+                                >
+                                  Cancel
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => handleStatusToggle(admin.id, admin.status)}
+                                  className={`button-action ${
+                                    admin.status === 'ACTIVE'
+                                      ? 'btn-action-warning'
+                                      : 'btn-action-success'
+                                  }`}
+                                  disabled={actionLoading[admin.id]}
+                                >
+                                  {actionLoading[admin.id]
+                                    ? '...'
+                                    : admin.status === 'ACTIVE'
+                                    ? 'Deactivate'
+                                    : 'Activate'}
+                                </button>
+                                <button
+                                  onClick={() => handleEdit(admin)}
+                                  className="button-action btn-action-primary"
+                                  disabled={actionLoading[admin.id]}
+                                  title="Edit Admin"
+                                >
+                                  {actionLoading[admin.id] ? '...' : '✏️'}
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(admin.id)}
+                                  className="button-action btn-action-danger"
+                                  disabled={actionLoading[admin.id]}
+                                  title="Delete Admin"
+                                >
+                                  {actionLoading[admin.id] ? '...' : '🗑️'}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="5" className="table-empty">
+                        No admins found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-            <button
-              className="pagination-button px-3 py-1 rounded-lg bg-gray-200 text-gray-700 disabled:opacity-50"
-              onClick={() => paginate(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      </div>
+
+            {/* ── Pagination ── */}
+            <div className="card-footer-row">
+              <div className="pagination">
+                <button
+                  className="pagination-button"
+                  onClick={() => paginate(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  ← Previous
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => (
+                  <button
+                    key={i + 1}
+                    className={`pagination-button ${
+                      currentPage === i + 1 ? 'pagination-active' : ''
+                    }`}
+                    onClick={() => paginate(i + 1)}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+
+                <button
+                  className="pagination-button"
+                  onClick={() => paginate(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+
+          </div>{/* /card */}
+        </div>{/* /page-content */}
+      </div>{/* /main-content */}
     </div>
   );
 };

@@ -30,7 +30,7 @@ const PaymentTracking = () => {
         const storesResponse = await api.get('/api/stores');
         setStores(storesResponse.data.stores || []);
 
-        // Fetch suppliers with monthly default, no period parameter
+        // Fetch suppliers
         const suppliersResponse = await api.get(
           `/api/inventory/suppliers/${filter}${
             selectedStore ? `?store_id=${selectedStore}` : ''
@@ -59,6 +59,7 @@ const PaymentTracking = () => {
         setTotalPaid(paidTotal);
 
         setSuccess('Payment data loaded successfully');
+        setTimeout(() => setSuccess(''), 3000);
       } catch (err) {
         handleApiError(err, setError);
         console.error('Fetch data error:', err);
@@ -82,6 +83,7 @@ const PaymentTracking = () => {
       });
       socket.on('notification', (notification) => {
         setSuccess(notification.message);
+        setTimeout(() => setSuccess(''), 4000);
       });
     } else {
       console.warn('Socket is not initialized or invalid');
@@ -102,20 +104,20 @@ const PaymentTracking = () => {
         suppliers.map((s) => (s.id === entryId ? { ...s, payment_status: 'PAID' } : s))
       );
       setSuccess('Payment marked as paid');
+      setTimeout(() => setSuccess(''), 3000);
+
       const unpaidResponse = await api.get(
         `/api/inventory/suppliers/unpaid${selectedStore ? `?store_id=${selectedStore}` : ''}`
       );
       const paidResponse = await api.get(
         `/api/inventory/suppliers/paid${selectedStore ? `?store_id=${selectedStore}` : ''}`
       );
-      setTotalUnpaid(unpaidResponse.data.suppliers.reduce(
-        (sum, s) => sum + (s.amount_due || 0),
-        0
-      ));
-      setTotalPaid(paidResponse.data.suppliers.reduce(
-        (sum, s) => sum + (s.amount_due || 0),
-        0
-      ));
+      setTotalUnpaid(
+        unpaidResponse.data.suppliers.reduce((sum, s) => sum + (s.amount_due || 0), 0)
+      );
+      setTotalPaid(
+        paidResponse.data.suppliers.reduce((sum, s) => sum + (s.amount_due || 0), 0)
+      );
       setError('');
     } catch (err) {
       handleApiError(err, setError);
@@ -127,18 +129,21 @@ const PaymentTracking = () => {
       const unpaidEntries = suppliers
         .filter((s) => s.payment_status === 'UNPAID')
         .map((s) => s.id);
-      await Promise.all(unpaidEntries.map((id) => api.put(`/api/inventory/update-payment/${id}`)));
+      await Promise.all(
+        unpaidEntries.map((id) => api.put(`/api/inventory/update-payment/${id}`))
+      );
       setSuppliers(
-        suppliers.map((s) => (unpaidEntries.includes(s.id) ? { ...s, payment_status: 'PAID' } : s))
+        suppliers.map((s) =>
+          unpaidEntries.includes(s.id) ? { ...s, payment_status: 'PAID' } : s
+        )
       );
       setTotalUnpaid(0);
       const paidResponse = await api.get(
         `/api/inventory/suppliers/paid${selectedStore ? `?store_id=${selectedStore}` : ''}`
       );
-      setTotalPaid(paidResponse.data.suppliers.reduce(
-        (sum, s) => sum + (s.amount_due || 0),
-        0
-      ));
+      setTotalPaid(
+        paidResponse.data.suppliers.reduce((sum, s) => sum + (s.amount_due || 0), 0)
+      );
       setSuccess('All payments marked as paid');
       setError('');
     } catch (err) {
@@ -158,154 +163,204 @@ const PaymentTracking = () => {
   };
 
   return (
-    <div className="merchant-container flex min-h-screen bg-gray-100">
+    <div className="merchant-container">
       <SideBar />
-      <div className="main-content flex-1 p-6">
+
+      <div className="main-content">
         <NavBar />
-        {error && <p className="text-red-500 mb-4 font-bold bg-red-100 p-3 rounded">{error}</p>}
-        {success && <p className="text-green-500 mb-4 font-bold bg-green-100 p-3 rounded">{success}</p>}
-        {loading && <p className="text-gray-500 bg-gray-100 p-3 rounded">Loading...</p>}
 
-        <div className="dashboard-header mb-6">
-          <h1 className="dashboard-title text-3xl font-bold">Payment Tracking</h1>
-          <p className="dashboard-subtitle text-gray-600">Manage supplier payments for the current month.</p>
-        </div>
+        <div className="page-content">
 
-        <div className="card bg-white p-6 rounded-lg shadow">
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex gap-4">
-              <div>
-                <div className="text-lg font-semibold">Total Unpaid</div>
-                <div className="text-xl font-bold text-red-600">{formatCurrency(totalUnpaid)}</div>
-              </div>
-              <div>
-                <div className="text-lg font-semibold">Total Paid</div>
-                <div className="text-xl font-bold text-green-600">{formatCurrency(totalPaid)}</div>
+          {/* ── Alerts ── */}
+          {error && <div className="alert alert-error">{error}</div>}
+          {success && <div className="alert alert-success">{success}</div>}
+          {loading && <div className="alert alert-info">Loading...</div>}
+
+          {/* ── Page Header ── */}
+          <div className="dashboard-header">
+            <h1 className="dashboard-title">Payment Tracking</h1>
+            <p className="dashboard-subtitle">
+              Manage supplier payments for the current month.
+            </p>
+          </div>
+
+          {/* ── Summary Strip ── */}
+          <div className="payment-summary-strip">
+            <div className="payment-summary-card">
+              <div className="payment-summary-label">Total Unpaid</div>
+              <div className="payment-summary-value unpaid">
+                {formatCurrency(totalUnpaid)}
               </div>
             </div>
-            <input
-              type="text"
-              placeholder="Search supplier or product..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="p-2 border border-gray-300 rounded-lg w-1/4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+            <div className="payment-summary-card">
+              <div className="payment-summary-label">Total Paid</div>
+              <div className="payment-summary-value paid">
+                {formatCurrency(totalPaid)}
+              </div>
+            </div>
           </div>
-          <div className="flex gap-2 mb-4">
-            <select
-              value={selectedStore}
-              onChange={(e) => setSelectedStore(e.target.value)}
-              className="p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="">All Stores</option>
-              {stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
-                </option>
-              ))}
-            </select>
-            <button
-              className={`button px-4 py-2 rounded-lg ${filter === 'paid' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-              onClick={() => setFilter('paid')}
-            >
-              Paid
-            </button>
-            <button
-              className={`button px-4 py-2 rounded-lg ${filter === 'unpaid' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-              onClick={() => setFilter('unpaid')}
-            >
-              Unpaid
-            </button>
-          </div>
-          <div className="mb-4">
-            <p className="text-gray-600">Showing {currentSuppliers.length} of {suppliers.length} suppliers</p>
-          </div>
-          <table className="table w-full mb-6">
-            <thead>
-              <tr className="bg-gray-200">
-                <th className="p-3 text-left">Supplier</th>
-                <th className="p-3 text-left">Product</th>
-                <th className="p-3 text-left">Amount</th>
-                <th className="p-3 text-left">Due Date</th>
-                <th className="p-3 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentSuppliers.length > 0 ? (
-                currentSuppliers.map((supplier) => (
-                  <tr key={supplier.id}>
-                    <td className="p-3">{supplier.supplier_name}</td>
-                    <td className="p-3">{supplier.product_name}</td>
-                    <td className="p-3">{formatCurrency(supplier.amount_due)}</td>
-                    <td className="p-3">
-                      <span
-                        className={
-                          new Date(supplier.due_date) < new Date() ? 'text-red-600' : 'text-gray-700'
-                        }
-                      >
-                        {formatDate(supplier.due_date)}
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      {filter === 'unpaid' && (
-                        <button
-                          onClick={() => handlePay(supplier.id)}
-                          className="button px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
-                        >
-                          Mark Paid
-                        </button>
-                      )}
-                    </td>
+
+          {/* ── Main Card ── */}
+          <div className="card">
+
+            {/* Card header: filters left, search right */}
+            <div className="card-header">
+              <div className="toolbar" style={{ margin: 0 }}>
+                <select
+                  value={selectedStore}
+                  onChange={(e) => setSelectedStore(e.target.value)}
+                >
+                  <option value="">All Stores</option>
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.name}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  className={`button ${filter === 'paid' ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setFilter('paid')}
+                >
+                  Paid
+                </button>
+                <button
+                  className={`button ${filter === 'unpaid' ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setFilter('unpaid')}
+                >
+                  Unpaid
+                </button>
+              </div>
+
+              <div className="search-wrapper">
+                <svg
+                  className="search-icon"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search supplier or product..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Row count */}
+            <p className="text-muted" style={{ marginBottom: '1rem' }}>
+              Showing {currentSuppliers.length} of {suppliers.length} suppliers
+            </p>
+
+            {/* ── Suppliers Table ── */}
+            <div className="table-wrapper">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Supplier</th>
+                    <th>Product</th>
+                    <th>Amount</th>
+                    <th>Due Date</th>
+                    <th>Actions</th>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="5" className="text-center text-gray-500 p-3">No suppliers found</td>
-                </tr>
+                </thead>
+                <tbody>
+                  {currentSuppliers.length > 0 ? (
+                    currentSuppliers.map((supplier) => (
+                      <tr key={supplier.id}>
+                        <td style={{ fontWeight: 500 }}>{supplier.supplier_name}</td>
+                        <td>{supplier.product_name}</td>
+                        <td>
+                          <strong>{formatCurrency(supplier.amount_due)}</strong>
+                        </td>
+                        <td>
+                          <span
+                            className={
+                              new Date(supplier.due_date) < new Date()
+                                ? 'text-danger'
+                                : ''
+                            }
+                          >
+                            {formatDate(supplier.due_date)}
+                          </span>
+                        </td>
+                        <td>
+                          {filter === 'unpaid' && (
+                            <button
+                              onClick={() => handlePay(supplier.id)}
+                              className="button-action btn-action-success"
+                            >
+                              Mark Paid
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="5" className="table-empty">
+                        No suppliers found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Card Footer: Mark All + Pagination ── */}
+            <div className="card-footer-row">
+              {filter === 'unpaid' && (
+                <button
+                  className="button btn-primary"
+                  onClick={handleMarkAllPaid}
+                >
+                  Mark All as Paid
+                </button>
               )}
-            </tbody>
-          </table>
-          <div className="flex justify-between items-center mt-4">
-            {filter === 'unpaid' && (
-              <button
-                className="button px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                onClick={handleMarkAllPaid}
-              >
-                Mark All as Paid
-              </button>
-            )}
-            <div className="flex justify-between items-center w-full max-w-xs">
-              <button
-                className="pagination-button px-3 py-1 rounded-lg bg-gray-200 text-gray-700 disabled:opacity-50"
-                onClick={() => paginate(currentPage - 1)}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </button>
-              <div className="flex gap-2">
+
+              <div className="pagination">
+                <button
+                  className="pagination-button"
+                  onClick={() => paginate(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  ← Previous
+                </button>
+
                 {Array.from({ length: totalPages }, (_, i) => (
                   <button
                     key={i + 1}
-                    className={`pagination-button px-3 py-1 rounded-lg ${
-                      currentPage === i + 1 ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'
+                    className={`pagination-button ${
+                      currentPage === i + 1 ? 'pagination-active' : ''
                     }`}
                     onClick={() => paginate(i + 1)}
                   >
                     {i + 1}
                   </button>
                 ))}
+
+                <button
+                  className="pagination-button"
+                  onClick={() => paginate(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Next →
+                </button>
               </div>
-              <button
-                className="pagination-button px-3 py-1 rounded-lg bg-gray-200 text-gray-700 disabled:opacity-50"
-                onClick={() => paginate(currentPage + 1)}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </button>
             </div>
-          </div>
-        </div>
-      </div>
+
+          </div>{/* /card */}
+        </div>{/* /page-content */}
+      </div>{/* /main-content */}
     </div>
   );
 };

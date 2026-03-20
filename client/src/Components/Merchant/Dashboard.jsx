@@ -86,8 +86,8 @@ const Dashboard = () => {
           datasets: [{
             label: 'Sales (KSh)',
             data: sData.datasets[0]?.data || [],
-            backgroundColor: '#6366f1',
-            borderColor: '#6366f1',
+            backgroundColor: '#d4a853',
+            borderColor: '#d4a853',
             borderWidth: 1,
             borderRadius: 4,
             barThickness: period === 'monthly' ? 40 : 20,
@@ -101,6 +101,7 @@ const Dashboard = () => {
         setTopProducts(topRes.data.top_products || []);
 
         setSuccess('Dashboard data updated');
+        setTimeout(() => setSuccess(''), 3000);
       } catch (err) {
         handleApiError(err, setError);
       } finally {
@@ -139,10 +140,7 @@ const Dashboard = () => {
     barThickness: period === 'monthly' ? 40 : 20,
   };
 
-  const combinedData = {
-    labels,
-    datasets: [salesDs, avgDs]
-  };
+  const combinedData = { labels, datasets: [salesDs, avgDs] };
 
   const chartOptions = {
     responsive: true,
@@ -168,7 +166,6 @@ const Dashboard = () => {
         beginAtZero: true,
         title: { display: true, text: 'Amount (KSh)' },
         ticks: {
-          // 🔥 Fix: Chart.js v4 passes a tick object; grab .value if present
           callback: val => {
             const num = typeof val === 'object' && val.value != null ? val.value : val;
             return formatCurrency(num);
@@ -185,212 +182,190 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="merchant-container flex min-h-screen bg-gray-100">
+    <div className="merchant-container">
       <SideBar />
-      <div className="main-content flex-1 p-6">
+
+      <div className="main-content">
         <NavBar />
 
-        {error && (
-          <p className="text-red-500 mb-4 font-bold bg-red-100 p-3 rounded">{error}</p>
-        )}
-        {success && (
-          <p className="text-green-500 mb-4 font-bold bg-green-100 p-3 rounded">{success}</p>
-        )}
-        {loading && (
-          <p className="text-gray-500 bg-gray-100 p-3 rounded">
-            Loading dashboard data...
-          </p>
-        )}
+        <div className="page-content">
 
-        <div className="dashboard-header mb-6">
-          <h1 className="dashboard-title text-3xl font-bold">Morning, Merchant!</h1>
-          <p className="dashboard-subtitle text-gray-600">
-            Here's what's happening with your stores today.
-          </p>
-        </div>
+          {/* ── Alerts ── */}
+          {error && <div className="alert alert-error">{error}</div>}
+          {success && <div className="alert alert-success">{success}</div>}
+          {loading && <div className="alert alert-info">Loading dashboard data...</div>}
 
-        <div className="flex gap-4 mb-6">
-          <select
-            value={selectedStore}
-            onChange={e => setSelectedStore(e.target.value)}
-            className="p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">All Stores</option>
-            {stores.map(store => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
-            ))}
-          </select>
-          <button
-            className={`button px-4 py-2 rounded-lg ${
-              period === 'weekly'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-200 text-gray-700'
-            }`}
-            onClick={() => setPeriod('weekly')}
-          >
-            Weekly
-          </button>
-          <button
-            className={`button px-4 py-2 rounded-lg ${
-              period === 'monthly'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-200 text-gray-700'
-            }`}
-            onClick={() => setPeriod('monthly')}
-          >
-            Monthly
-          </button>
-        </div>
-
-        <div className="dashboard-grid grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="dashboard-metric bg-white p-6 rounded-lg shadow">
-            <h3 className="metric-title text-lg font-semibold text-gray-700">
-              Unpaid Suppliers
-            </h3>
-            <p className="metric-value text-2xl font-bold">
-              {dashboardData.unpaid_suppliers_count}
-            </p>
-            <p className="metric-subvalue text-gray-500">
-              {formatCurrency(dashboardData.unpaid_suppliers_amount)}
+          {/* ── Page Header ── */}
+          <div className="dashboard-header">
+            <h1 className="dashboard-title">Good Morning, Merchant!</h1>
+            <p className="dashboard-subtitle">
+              Here's what's happening with your stores today.
             </p>
           </div>
-          <div className="dashboard-metric bg-white p-6 rounded-lg shadow">
-            <h3 className="metric-title text-lg font-semibold text-gray-700">
-              Paid Suppliers
-            </h3>
-            <p className="metric-value text-2xl font-bold">
-              {dashboardData.paid_suppliers_count}
-            </p>
-            <p className="metric-subvalue text-gray-500">
-              {formatCurrency(dashboardData.paid_suppliers_amount)}
-            </p>
-          </div>
-          <div className="dashboard-metric bg-white p-6 rounded-lg shadow">
-            <h3 className="metric-title text-lg font-semibold text-gray-700">
-              Low Stock Alerts
-            </h3>
-            <p
-              className={`metric-value text-2xl font-bold ${
-                dashboardData.low_stock_count > 0
-                  ? 'text-red-600'
-                  : 'text-gray-700'
-              }`}
+
+          {/* ── Toolbar ── */}
+          <div className="toolbar">
+            <select
+              value={selectedStore}
+              onChange={e => setSelectedStore(e.target.value)}
             >
-              {dashboardData.low_stock_count}
-            </p>
-          </div>
-          <div className="dashboard-metric bg-white p-6 rounded-lg shadow">
-            <h3 className="metric-title text-lg font-semibold text-gray-700">
-              Normal Stock
-            </h3>
-            <p className="metric-value text-2xl font-bold">
-              {dashboardData.normal_stock_count}
-            </p>
-          </div>
-          <div className="dashboard-metric bg-white p-6 rounded-lg shadow">
-            <h3 className="metric-title text-lg font-semibold text-gray-700">
-              Total Sales
-            </h3>
-            <p className="metric-value text-2xl font-bold">
-              {formatCurrency(dashboardData.total_sales)}
-            </p>
-          </div>
-          <div className="dashboard-metric bg-white p-6 rounded-lg shadow">
-            <h3 className="metric-title text-lg font-semibold text-gray-700">
-              Total Spoilage
-            </h3>
-            <p className="metric-value text-2xl font-bold">
-              {formatCurrency(dashboardData.total_spoilage_value)}
-            </p>
-          </div>
-        </div>
+              <option value="">All Stores</option>
+              {stores.map(store => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
 
-        {dashboardData.low_stock_products.length > 0 && (
-          <div className="low-stock-alerts mt-6 bg-white p-6 rounded-lg shadow">
-            <h3 className="text-lg font-semibold text-gray-700 mb-4">
-              Low Stock Products
-            </h3>
-            <table className="table w-full border-collapse">
-              <thead>
-                <tr className="bg-gray-200">
-                  <th className="p-3 text-left">Product</th>
-                  <th className="p-3 text-left">Current Stock</th>
-                  <th className="p-3 text-left">Min Stock Level</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dashboardData.low_stock_products.map((p, i) => (
-                  <tr
-                    key={i}
-                    className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-                  >
-                    <td className="p-3">{p.name}</td>
-                    <td className="p-3">{p.current_stock}</td>
-                    <td className="p-3">{p.min_stock_level}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <button
+              className={`button ${period === 'weekly' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setPeriod('weekly')}
+            >
+              Weekly
+            </button>
+            <button
+              className={`button ${period === 'monthly' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setPeriod('monthly')}
+            >
+              Monthly
+            </button>
           </div>
-        )}
 
-        <div className="dashboard-chart bg-white p-6 rounded-lg shadow mt-6">
-          <h3 className="text-lg font-semibold text-gray-700 mb-4">
-            Performance Chart
-          </h3>
-          <div className="chart-container h-96">
-            {combinedData.labels.length > 0 ? (
-              <Bar data={combinedData} options={chartOptions} />
-            ) : (
-              <p className="text-gray-500">
-                No data available for the selected period/store.
-              </p>
-            )}
+          {/* ── Metric Cards ── */}
+          <div className="dashboard-grid">
+            <div className="dashboard-metric">
+              <div className="metric-title">Unpaid Suppliers</div>
+              <div className="metric-value">
+                {dashboardData.unpaid_suppliers_count}
+              </div>
+              <div className="metric-subvalue">
+                {formatCurrency(dashboardData.unpaid_suppliers_amount)}
+              </div>
+            </div>
+
+            <div className="dashboard-metric">
+              <div className="metric-title">Paid Suppliers</div>
+              <div className="metric-value">
+                {dashboardData.paid_suppliers_count}
+              </div>
+              <div className="metric-subvalue">
+                {formatCurrency(dashboardData.paid_suppliers_amount)}
+              </div>
+            </div>
+
+            <div className="dashboard-metric">
+              <div className="metric-title">Low Stock Alerts</div>
+              <div className={`metric-value ${dashboardData.low_stock_count > 0 ? 'metric-danger' : ''}`}>
+                {dashboardData.low_stock_count}
+              </div>
+            </div>
+
+            <div className="dashboard-metric">
+              <div className="metric-title">Normal Stock</div>
+              <div className="metric-value">
+                {dashboardData.normal_stock_count}
+              </div>
+            </div>
+
+            <div className="dashboard-metric">
+              <div className="metric-title">Total Sales</div>
+              <div className="metric-value metric-currency">
+                {formatCurrency(dashboardData.total_sales)}
+              </div>
+            </div>
+
+            <div className="dashboard-metric">
+              <div className="metric-title">Total Spoilage</div>
+              <div className="metric-value metric-currency">
+                {formatCurrency(dashboardData.total_spoilage_value)}
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="top-products mt-6 bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold text-gray-700 mb-4">
-            {selectedStore ? 'Top 5 Selling Products' : 'Top Selling Products'}
-          </h3>
-          <table className="table w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-200">
-                <th className="p-3 text-left">Product</th>
-                <th className="p-3 text-left">Units Sold</th>
-                <th className="p-3 text-left">Revenue (KSh)</th>
-                <th className="p-3 text-left">Unit Price (KSh)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topProducts.length > 0 ? (
-                topProducts.map((prod, idx) => (
-                  <tr
-                    key={idx}
-                    className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-                  >
-                    <td className="p-3">{prod.product_name}</td>
-                    <td className="p-3">{prod.units_sold}</td>
-                    <td className="p-3">{formatCurrency(prod.revenue)}</td>
-                    <td className="p-3">{formatCurrency(prod.unit_price)}</td>
-                  </tr>
-                ))
+          {/* ── Low Stock Products ── */}
+          {dashboardData.low_stock_products.length > 0 && (
+            <div className="low-stock-alerts">
+              <h3 className="section-title">⚠ Low Stock Products</h3>
+              <div className="table-wrapper">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>Current Stock</th>
+                      <th>Min Stock Level</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dashboardData.low_stock_products.map((p, i) => (
+                      <tr key={i}>
+                        <td>{p.name}</td>
+                        <td>
+                          <span className="badge badge-danger">{p.current_stock}</span>
+                        </td>
+                        <td>{p.min_stock_level}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── Performance Chart ── */}
+          <div className="dashboard-chart">
+            <div className="chart-header">
+              <h3 className="chart-title">Performance Chart</h3>
+            </div>
+            <div className="chart-container">
+              {combinedData.labels.length > 0 ? (
+                <Bar data={combinedData} options={chartOptions} />
               ) : (
-                <tr>
-                  <td
-                    colSpan="4"
-                    className="text-center text-gray-500 p-3"
-                  >
-                    No top-selling products found.
-                  </td>
-                </tr>
+                <p className="text-muted">
+                  No data available for the selected period/store.
+                </p>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </div>
+          </div>
+
+          {/* ── Top Products ── */}
+          <div className="top-products">
+            <h3 className="section-title">
+              {selectedStore ? 'Top 5 Selling Products' : 'Top Selling Products'}
+            </h3>
+            <div className="table-wrapper">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Units Sold</th>
+                    <th>Revenue (KSh)</th>
+                    <th>Unit Price (KSh)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topProducts.length > 0 ? (
+                    topProducts.map((prod, idx) => (
+                      <tr key={idx}>
+                        <td>{prod.product_name}</td>
+                        <td>{prod.units_sold}</td>
+                        <td>{formatCurrency(prod.revenue)}</td>
+                        <td>{formatCurrency(prod.unit_price)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="4" className="table-empty">
+                        No top-selling products found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>{/* /page-content */}
+      </div>{/* /main-content */}
     </div>
   );
 };

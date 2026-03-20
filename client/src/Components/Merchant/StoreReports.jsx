@@ -86,6 +86,7 @@ const StoreReports = () => {
         });
 
         setSuccess('Data loaded successfully');
+        setTimeout(() => setSuccess(''), 3000);
       } catch (err) {
         handleApiError(err, setError);
       } finally {
@@ -106,6 +107,7 @@ const StoreReports = () => {
       });
       socket.on('notification', (notification) => {
         setSuccess(notification.message);
+        setTimeout(() => setSuccess(''), 4000);
       });
     }
 
@@ -176,10 +178,12 @@ const StoreReports = () => {
       {
         label: 'Sales (KSh)',
         data: salesReport?.chart_data?.datasets?.[0]?.data || getChartLabels().map(() => 0),
-        borderColor: '#6366f1',
-        backgroundColor: 'rgba(99, 102, 241, 0.2)',
+        borderColor: '#d4a853',
+        backgroundColor: 'rgba(212, 168, 83, 0.15)',
         tension: 0.4,
         fill: true,
+        pointBackgroundColor: '#d4a853',
+        pointRadius: 4,
       },
       {
         label: 'Top Products Avg (KSh)',
@@ -190,9 +194,11 @@ const StoreReports = () => {
               )
             : getChartLabels().map(() => 0),
         borderColor: '#10b981',
-        backgroundColor: 'rgba(16, 185, 129, 0.2)',
+        backgroundColor: 'rgba(16, 185, 129, 0.15)',
         tension: 0.4,
         fill: true,
+        pointBackgroundColor: '#10b981',
+        pointRadius: 4,
       },
     ],
   };
@@ -205,7 +211,9 @@ const StoreReports = () => {
       title: {
         display: true,
         text: `Sales Trend (${
-          selectedStore ? stores.find((s) => s.id === parseInt(selectedStore))?.name : 'All Stores'
+          selectedStore
+            ? stores.find((s) => s.id === parseInt(selectedStore))?.name
+            : 'All Stores'
         })`,
       },
       tooltip: {
@@ -238,143 +246,174 @@ const StoreReports = () => {
   };
 
   return (
-    <div className="merchant-container flex min-h-screen bg-gray-100">
+    <div className="merchant-container">
       <SideBar />
-      <div className="main-content flex-1 p-6">
+
+      <div className="main-content">
         <NavBar />
-        {error || reduxError ? (
-          <p className="text-red-500 mb-4 font-bold bg-red-100 p-3 rounded">{error || reduxError}</p>
-        ) : null}
-        {success && (
-          <p className="text-green-500 mb-4 font-bold bg-green-100 p-3 rounded">{success}</p>
-        )}
-        {(loading || reduxLoading) && (
-          <p className="text-gray-500 bg-gray-100 p-3 rounded">Loading reports...</p>
-        )}
 
-        <div className="dashboard-header mb-6">
-          <h1 className="dashboard-title text-3xl font-bold">Store Reports</h1>
-          <p className="dashboard-subtitle text-gray-600">Detailed performance metrics for your stores.</p>
-        </div>
+        <div className="page-content">
 
-        <div className="card bg-white p-6 rounded-lg shadow">
-          <div className="flex justify-between mb-6">
-            <div className="flex gap-4">
-              <select
-                value={selectedStore}
-                onChange={(e) => setSelectedStore(e.target.value)}
-                className="p-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">All Stores</option>
-                {stores.map((store) => (
-                  <option key={store.id} value={store.id}>
-                    {store.name}
-                  </option>
-                ))}
-              </select>
+          {/* ── Alerts ── */}
+          {(error || reduxError) && (
+            <div className="alert alert-error">{error || reduxError}</div>
+          )}
+          {success && (
+            <div className="alert alert-success">{success}</div>
+          )}
+          {(loading || reduxLoading) && (
+            <div className="alert alert-info">Loading reports...</div>
+          )}
+
+          {/* ── Page Header ── */}
+          <div className="dashboard-header">
+            <h1 className="dashboard-title">Store Reports</h1>
+            <p className="dashboard-subtitle">
+              Detailed performance metrics for your stores.
+            </p>
+          </div>
+
+          {/* ── Main Card ── */}
+          <div className="card">
+
+            {/* Card header: filters left, export right */}
+            <div className="card-header">
+              <div className="toolbar" style={{ margin: 0 }}>
+                <select
+                  value={selectedStore}
+                  onChange={(e) => setSelectedStore(e.target.value)}
+                >
+                  <option value="">All Stores</option>
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.name}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  className={`button ${period === 'weekly' ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setPeriod('weekly')}
+                >
+                  Weekly
+                </button>
+                <button
+                  className={`button ${period === 'monthly' ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setPeriod('monthly')}
+                >
+                  Monthly
+                </button>
+              </div>
+
               <button
-                className={`button px-4 py-2 rounded-lg ${
-                  period === 'weekly' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'
-                }`}
-                onClick={() => setPeriod('weekly')}
+                className="button btn-success"
+                onClick={exportToPDF}
               >
-                Weekly
-              </button>
-              <button
-                className={`button px-4 py-2 rounded-lg ${
-                  period === 'monthly' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'
-                }`}
-                onClick={() => setPeriod('monthly')}
-              >
-                Monthly
+                ↓ Export PDF
               </button>
             </div>
-            <button
-              className="button px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
-              onClick={exportToPDF}
-            >
-              Export PDF
-            </button>
-          </div>
 
-          <div className="dashboard-chart mb-6">
-            <h2 className="card-title text-lg font-semibold text-gray-700 mb-4">Sales Trend</h2>
-            <div className="chart-container h-64">
-              <Line data={salesChartData} options={chartOptions} />
+            {/* ── Sales Trend Chart ── */}
+            <div className="dashboard-chart">
+              <div className="chart-header">
+                <h2 className="chart-title">Sales Trend</h2>
+              </div>
+              <div className="chart-container">
+                <Line data={salesChartData} options={chartOptions} />
+              </div>
             </div>
-          </div>
 
-          <div className="summary-table mt-6">
-            <h3 className="text-lg font-semibold text-gray-700 mb-4">Summary</h3>
-            <table className="table w-full border-collapse">
-              <thead>
-                <tr className="bg-gray-200">
-                  <th className="p-3 text-left">Metric</th>
-                  <th className="p-3 text-left">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="p-3">Total Sales</td>
-                  <td className="p-3">{formatCurrency(dashboardData.total_sales)}</td>
-                </tr>
-                <tr>
-                  <td className="p-3">Total Spoilage</td>
-                  <td className="p-3">{formatCurrency(dashboardData.total_spoilage_value)}</td>
-                </tr>
-                <tr>
-                  <td className="p-3">Paid Suppliers</td>
-                  <td className="p-3">
-                    {dashboardData.paid_suppliers_count} (
-                    {formatCurrency(dashboardData.paid_suppliers_amount)})
-                  </td>
-                </tr>
-                <tr>
-                  <td className="p-3">Unpaid Suppliers</td>
-                  <td className="p-3">
-                    {dashboardData.unpaid_suppliers_count} (
-                    {formatCurrency(dashboardData.unpaid_suppliers_amount)})
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div className="top-products mt-6">
-            <h3 className="text-lg font-semibold text-gray-700 mb-4">Top Selling Products</h3>
-            <table className="table w-full border-collapse">
-              <thead>
-                <tr className="bg-gray-200">
-                  <th className="p-3 text-left">Product</th>
-                  <th className="p-3 text-left">Units Sold</th>
-                  <th className="p-3 text-left">Revenue (KSh)</th>
-                  <th className="p-3 text-left">Growth</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topProducts.length > 0 ? (
-                  topProducts.map((product, index) => (
-                    <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                      <td className="p-3">{product.product_name}</td>
-                      <td className="p-3">{product.units_sold}</td>
-                      <td className="p-3">{formatCurrency(product.revenue)}</td>
-                      <td className={`p-3 ${product.growth > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {product.growth > 0 ? '+' : ''}{product.growth}%
+            {/* ── Summary Table ── */}
+            <div style={{ marginTop: '2rem' }}>
+              <h3 className="section-title">Summary</h3>
+              <div className="table-wrapper">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Metric</th>
+                      <th>Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Total Sales</td>
+                      <td>
+                        <strong>{formatCurrency(dashboardData.total_sales)}</strong>
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="4" className="text-center text-gray-500 p-3">
-                      No products found
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+                    <tr>
+                      <td>Total Spoilage</td>
+                      <td>{formatCurrency(dashboardData.total_spoilage_value)}</td>
+                    </tr>
+                    <tr>
+                      <td>Paid Suppliers</td>
+                      <td>
+                        <span className="badge badge-success">
+                          {dashboardData.paid_suppliers_count}
+                        </span>
+                        &nbsp;({formatCurrency(dashboardData.paid_suppliers_amount)})
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Unpaid Suppliers</td>
+                      <td>
+                        <span className="badge badge-danger">
+                          {dashboardData.unpaid_suppliers_count}
+                        </span>
+                        &nbsp;({formatCurrency(dashboardData.unpaid_suppliers_amount)})
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* ── Top Products Table ── */}
+            <div style={{ marginTop: '2rem' }}>
+              <h3 className="section-title">Top Selling Products</h3>
+              <div className="table-wrapper">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>Units Sold</th>
+                      <th>Revenue (KSh)</th>
+                      <th>Growth</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topProducts.length > 0 ? (
+                      topProducts.map((product, index) => (
+                        <tr key={index}>
+                          <td>{product.product_name}</td>
+                          <td>{product.units_sold}</td>
+                          <td>{formatCurrency(product.revenue)}</td>
+                          <td>
+                            <span
+                              className={`badge ${
+                                product.growth > 0 ? 'badge-success' : 'badge-danger'
+                              }`}
+                            >
+                              {product.growth > 0 ? '+' : ''}{product.growth}%
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="4" className="table-empty">
+                          No products found
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>{/* /card */}
+        </div>{/* /page-content */}
+      </div>{/* /main-content */}
     </div>
   );
 };
