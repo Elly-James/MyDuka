@@ -25,36 +25,33 @@ const SideBar = () => {
       <button className="sidebar-toggle" onClick={toggleSidebar}>
         {collapsed ? <FaChevronRight /> : <FaChevronLeft />}
       </button>
+
       <nav className="sidebar-nav">
-        <Link
-          to="/merchant/dashboard"
-          className={`sidebar-link ${isActive('/merchant/dashboard')}`}
-        >
-          <span className="sidebar-icon">📊</span> 
-          {!collapsed && "Dashboard"}
+        <Link to="/merchant/dashboard" className={`sidebar-link ${isActive('/merchant/dashboard')}`}>
+          <span className="sidebar-icon">📊</span>
+          {!collapsed && <span>Dashboard</span>}
         </Link>
-        <Link
-          to="/merchant/admin-management"
-          className={`sidebar-link ${isActive('/merchant/admin-management')}`}
-        >
-          <span className="sidebar-icon">👥</span> 
-          {!collapsed && "Admin Management"}
+        <Link to="/merchant/admin-management" className={`sidebar-link ${isActive('/merchant/admin-management')}`}>
+          <span className="sidebar-icon">👥</span>
+          {!collapsed && <span>Admin Management</span>}
         </Link>
-        <Link
-          to="/merchant/store-reports"
-          className={`sidebar-link ${isActive('/merchant/store-reports')}`}
-        >
-          <span className="sidebar-icon">📋</span> 
-          {!collapsed && "Store Reports"}
+        <Link to="/merchant/store-reports" className={`sidebar-link ${isActive('/merchant/store-reports')}`}>
+          <span className="sidebar-icon">📋</span>
+          {!collapsed && <span>Store Reports</span>}
         </Link>
-        <Link
-          to="/merchant/payment-tracking"
-          className={`sidebar-link ${isActive('/merchant/payment-tracking')}`}
-        >
-          <span className="sidebar-icon">💰</span> 
-          {!collapsed && "Payment Tracking"}
+        <Link to="/merchant/payment-tracking" className={`sidebar-link ${isActive('/merchant/payment-tracking')}`}>
+          <span className="sidebar-icon">💰</span>
+          {!collapsed && <span>Payment Tracking</span>}
         </Link>
       </nav>
+
+      {/* Logout section (matches your CSS) */}
+      <div className="sidebar-footer">
+        <button onClick={handleLogout} className="sidebar-logout">
+          <span className="sidebar-icon">🚪</span>
+          {!collapsed && <span>Logout</span>}
+        </button>
+      </div>
     </aside>
   );
 };
