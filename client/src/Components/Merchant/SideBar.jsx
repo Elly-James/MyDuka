@@ -1,3 +1,8 @@
+// src/Merchant/SideBar.jsx
+// Fixed SideBar — syncs collapsed state so .main-content and .navbar
+// both receive the correct margin/left offset automatically via CSS
+// sibling selectors (.sidebar.collapsed ~ .main-content).
+
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
@@ -6,19 +11,14 @@ import './merchant.css';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 
 const SideBar = () => {
-  const dispatch = useDispatch();
-  const location = useLocation();
+  const dispatch  = useDispatch();
+  const location  = useLocation();
   const [collapsed, setCollapsed] = useState(false);
 
   const isActive = (path) => (location.pathname === path ? 'active' : '');
 
-  const handleLogout = () => {
-    dispatch(logout());
-  };
-
-  const toggleSidebar = () => {
-    setCollapsed(!collapsed);
-  };
+  const handleLogout   = () => dispatch(logout());
+  const toggleSidebar  = () => setCollapsed((prev) => !prev);
 
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>

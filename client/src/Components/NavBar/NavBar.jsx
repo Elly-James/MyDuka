@@ -1,4 +1,9 @@
-import React, { useContext } from 'react';
+// src/NavBar/NavBar.jsx
+// Fix: watches the sidebar DOM for the 'collapsed' class via MutationObserver
+// and applies .sidebar-collapsed to the navbar so left: var(--sidebar-w-sm)
+// kicks in — eliminating the white gap on the right side.
+
+import React, { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import './navbar.css';
@@ -7,10 +12,31 @@ const NavBar = () => {
   const { user, logout, loading } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  // Wait until loading is complete
+  // Track whether the sidebar is collapsed so we can shift the navbar left
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    const sidebar = document.querySelector('.sidebar');
+    if (!sidebar) return;
+
+    // Set initial state (e.g. if page refreshes while collapsed)
+    setSidebarCollapsed(sidebar.classList.contains('collapsed'));
+
+    // Watch for class changes on the sidebar element
+    const observer = new MutationObserver(() => {
+      setSidebarCollapsed(sidebar.classList.contains('collapsed'));
+    });
+
+    observer.observe(sidebar, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
   if (loading) return null;
-  // Don't show NavBar on public pages (e.g., login)
-  if (!user) return null;
+  if (!user)   return null;
 
   const getDashboardRoute = () => {
     if (user.role === 'MERCHANT') return '/merchant/dashboard';
@@ -29,7 +55,7 @@ const NavBar = () => {
   };
 
   return (
-    <nav className="navbar">
+    <nav className={`navbar${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
       <div className="navbar-container">
 
         {/* ── Logo ── */}
@@ -38,7 +64,8 @@ const NavBar = () => {
             className="navbar-logo"
             onClick={() => navigate(getDashboardRoute())}
           >
-            <h1 className="logo-text">MyDuka</h1>
+            {/* span instead of h1 — avoids browser default margins */}
+            <span className="logo-text">MyDuka</span>
           </div>
         </div>
 

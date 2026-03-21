@@ -107,9 +107,12 @@ html, body, #root {
 .merchant-container {
   display: flex;
   min-height: 100vh;
+  /* FIX: ensure container always spans full viewport width */
   width: 100%;
+  max-width: 100%;
   background: var(--bg);
   position: relative;
+  overflow-x: hidden;
 }
 
 /* ============================================================
@@ -224,7 +227,10 @@ html, body, #root {
   scrollbar-color: rgba(255,255,255,0.1) transparent;
 }
 .sidebar-nav::-webkit-scrollbar { width: 3px; }
-.sidebar-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+}
 
 /* Section label */
 .sidebar-section-label {
@@ -375,6 +381,8 @@ html, body, #root {
 
 /* ============================================================
    ─── TOP NAVBAR ────────────────────────────────────────────
+   Kept here as fallback/override for navbar.css.
+   navbar.css is the primary source of truth for .navbar.
    ============================================================ */
 .navbar {
   position: fixed;
@@ -394,14 +402,13 @@ html, body, #root {
   box-shadow: var(--shadow-sm);
 }
 
-.sidebar.collapsed ~ .main-content .navbar,
-.sidebar.collapsed + * .navbar {
+/*
+  FIX: NavBar.jsx adds .sidebar-collapsed to <nav> via MutationObserver
+  when the sidebar element has the 'collapsed' class. This rule shifts
+  the navbar left to fill the gap left by the narrower collapsed sidebar.
+*/
+.navbar.sidebar-collapsed {
   left: var(--sidebar-w-sm);
-}
-
-/* Adjust navbar when sidebar is collapsed */
-.navbar-shifted {
-  left: var(--sidebar-w-sm) !important;
 }
 
 .navbar-container {
@@ -495,6 +502,17 @@ html, body, #root {
   border: 2px solid var(--gold);
   flex-shrink: 0;
   box-shadow: 0 0 0 3px rgba(212, 168, 83, 0.12);
+  /* FIX: prevent gradient text from logo-text leaking into avatar */
+  background-clip: unset;
+  -webkit-background-clip: unset;
+  -webkit-text-fill-color: var(--gold-light);
+}
+
+/* User name + role stacked */
+.user-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .user-name {
@@ -505,6 +523,9 @@ html, body, #root {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* FIX: prevent gradient bleeding from parent logo-text */
+  background: none;
+  -webkit-text-fill-color: var(--slate-700);
 }
 
 .user-role {
@@ -513,6 +534,9 @@ html, body, #root {
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  /* FIX: prevent gradient bleeding */
+  background: none;
+  -webkit-text-fill-color: var(--slate-400);
 }
 
 .logout-button {
@@ -538,34 +562,48 @@ html, body, #root {
   box-shadow: var(--shadow-gold);
   transform: translateY(-1px);
 }
+.logout-button:active {
+  transform: translateY(0);
+}
 
 /* ============================================================
    ─── MAIN CONTENT AREA ─────────────────────────────────────
-   
-   THE KEY FIX: The sidebar is position:fixed so it is OUT of
-   normal flow and takes NO flex space. flex:1 alone fills all
-   remaining width. Adding width:calc(100% - sidebar-w) on top
-   of flex:1 double-constrains the element and creates a white
-   gap on the right. The fix is: use ONLY flex:1 + margin-left.
-   min-width:0 prevents flex children from overflowing.
+
+   THE KEY FIX EXPLAINED:
+   The sidebar is position:fixed — it is OUT of normal flow
+   and contributes ZERO flex space to the container.
+
+   WRONG (causes white gap on the right):
+     flex: 1 + no explicit width
+   The browser uses content size as a minimum width floor,
+   which prevents flex:1 from filling 100% of remaining space.
+
+   CORRECT:
+     flex: 1 + width: 0 + margin-left: var(--sidebar-w)
+   Setting width:0 removes the content-size floor entirely.
+   flex:1 then correctly expands to fill ALL remaining space.
+   margin-left visually clears the fixed sidebar panel.
+   min-width:0 stops flex children from overflowing the box.
    ============================================================ */
 .main-content {
   flex: 1;
-  /* Pushes content right to clear the fixed sidebar */
+  /* THE FIX: width:0 lets flex:1 fill all remaining space */
+  width: 0;
+  /* Clears the fixed sidebar visually */
   margin-left: var(--sidebar-w);
-  /* Pushes content down to clear the fixed navbar */
+  /* Clears the fixed navbar */
   margin-top: var(--navbar-h);
   min-height: calc(100vh - var(--navbar-h));
   background: var(--bg);
   display: flex;
   flex-direction: column;
   transition: margin-left var(--transition-lg);
-  /* DO NOT set width here — flex:1 handles full width */
   overflow-x: hidden;
-  /* Prevents flex child overflow */
+  /* Stops flex children from overflowing */
   min-width: 0;
 }
 
+/* When sidebar is collapsed, shift main-content left to match */
 .main-content.sidebar-collapsed,
 .sidebar.collapsed ~ .main-content {
   margin-left: var(--sidebar-w-sm);
@@ -576,8 +614,8 @@ html, body, #root {
   flex: 1;
   padding: 2rem 2.5rem;
   width: 100%;
-  /* Prevents flex child overflow */
   min-width: 0;
+  box-sizing: border-box;
 }
 
 /* ============================================================
@@ -628,6 +666,8 @@ html, body, #root {
   margin-bottom: 1.5rem;
   animation: alertSlideIn 0.3s var(--ease);
   position: relative;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 @keyframes alertSlideIn {
@@ -710,8 +750,8 @@ p[class*="text-green-500"] {
   padding: 1.75rem !important;
   margin-bottom: 1.5rem;
   transition: var(--transition);
-  /* Ensure card fills full available width */
   width: 100%;
+  box-sizing: border-box;
 }
 .card:hover {
   box-shadow: var(--shadow-md);
@@ -755,6 +795,7 @@ p[class*="text-green-500"] {
   gap: 1.25rem;
   margin-bottom: 2rem;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .dashboard-metric {
@@ -1011,9 +1052,13 @@ select:hover {
   scrollbar-width: thin;
   scrollbar-color: var(--slate-200) transparent;
   width: 100%;
+  box-sizing: border-box;
 }
 .table-wrapper::-webkit-scrollbar { height: 4px; }
-.table-wrapper::-webkit-scrollbar-thumb { background: var(--slate-200); border-radius: 2px; }
+.table-wrapper::-webkit-scrollbar-thumb {
+  background: var(--slate-200);
+  border-radius: 2px;
+}
 
 .table {
   width: 100%;
@@ -1287,6 +1332,7 @@ textarea,
   color: var(--slate-700);
   transition: var(--transition);
   box-shadow: var(--shadow-xs);
+  box-sizing: border-box;
 }
 input:focus,
 textarea:focus,
@@ -1460,6 +1506,7 @@ textarea:hover:not(:focus) { border-color: var(--slate-300); }
   border: 1px solid var(--slate-100);
   margin-top: 1.5rem;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .chart-header {
@@ -1488,6 +1535,7 @@ textarea:hover:not(:focus) { border-color: var(--slate-300); }
   border-left: 4px solid var(--danger);
   margin-top: 1.5rem;
   width: 100%;
+  box-sizing: border-box;
 }
 
 /* ============================================================
@@ -1501,6 +1549,7 @@ textarea:hover:not(:focus) { border-color: var(--slate-300); }
   border: 1px solid var(--slate-100);
   margin-top: 1.5rem;
   width: 100%;
+  box-sizing: border-box;
 }
 
 /* ============================================================
@@ -1512,6 +1561,7 @@ textarea:hover:not(:focus) { border-color: var(--slate-300); }
   gap: 1.25rem;
   margin-bottom: 1.5rem;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .payment-summary-card {
@@ -1568,6 +1618,7 @@ textarea:hover:not(:focus) { border-color: var(--slate-300); }
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   width: 100%;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .footer-container {
@@ -1618,7 +1669,7 @@ textarea:hover:not(:focus) { border-color: var(--slate-300); }
 .bg-green-100   { background: var(--success-bg) !important; border: 1px solid var(--success-border) !important; }
 
 /* Font overrides */
-.font-bold    { font-weight: 700 !important; }
+.font-bold     { font-weight: 700 !important; }
 .font-semibold { font-weight: 600 !important; }
 
 /* Hover rows */
@@ -1644,20 +1695,23 @@ textarea:hover:not(:focus) { border-color: var(--slate-300); }
   scrollbar-color: var(--slate-200) transparent;
 }
 .overflow-x-auto::-webkit-scrollbar { height: 4px; }
-.overflow-x-auto::-webkit-scrollbar-thumb { background: var(--slate-200); border-radius: 2px; }
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: var(--slate-200);
+  border-radius: 2px;
+}
 
 /* ============================================================
    ─── RESPONSIVE ────────────────────────────────────────────
    ============================================================ */
 
-/* Large screens — keep full sidebar */
+/* Large screens — keep full 3-col grid */
 @media (min-width: 1280px) {
   .dashboard-grid {
     grid-template-columns: repeat(3, 1fr);
   }
 }
 
-/* Medium / Tablet — collapse sidebar to icons */
+/* Medium / Tablet — collapse sidebar to icons automatically */
 @media (max-width: 1024px) {
   :root {
     --sidebar-w: var(--sidebar-w-sm);
@@ -1692,7 +1746,7 @@ textarea:hover:not(:focus) { border-color: var(--slate-300); }
   }
 }
 
-/* Tablet — hidden sidebar, mobile nav trigger */
+/* Tablet — sidebar hidden, full-width layout */
 @media (max-width: 768px) {
   :root {
     --sidebar-w: 0px;
@@ -1710,7 +1764,7 @@ textarea:hover:not(:focus) { border-color: var(--slate-300); }
     box-shadow: var(--shadow-xl);
   }
 
-  /* Restore labels when mobile open */
+  /* Restore labels when mobile sidebar is open */
   .sidebar.mobile-open .sidebar-title,
   .sidebar.mobile-open .sidebar-link-label,
   .sidebar.mobile-open .sidebar-section-label,
@@ -1740,13 +1794,16 @@ textarea:hover:not(:focus) { border-color: var(--slate-300); }
   }
   .sidebar.mobile-open ~ .sidebar-overlay { display: block; }
 
+  /* FIX: navbar spans full width on mobile */
   .navbar {
     left: 0 !important;
     padding: 0 1rem;
   }
 
+  /* FIX: main content fills full width on mobile */
   .main-content {
     margin-left: 0 !important;
+    width: 100% !important;
   }
 
   .dashboard-grid {
@@ -1763,7 +1820,9 @@ textarea:hover:not(:focus) { border-color: var(--slate-300); }
     gap: 0.5rem;
   }
 
-  .user-name {
+  /* Hide user text on mobile — avatar is enough */
+  .user-name,
+  .user-role {
     display: none;
   }
 
@@ -1789,7 +1848,7 @@ textarea:hover:not(:focus) { border-color: var(--slate-300); }
   }
 }
 
-/* Mobile */
+/* Mobile — single column, tighter spacing */
 @media (max-width: 480px) {
   :root {
     --navbar-h: 52px;
@@ -1829,7 +1888,8 @@ textarea:hover:not(:focus) { border-color: var(--slate-300); }
     font-size: 0.8125rem;
   }
 
-  .table th, .table td {
+  .table th,
+  .table td {
     padding: 0.75rem 0.875rem;
     font-size: 0.8125rem;
   }
