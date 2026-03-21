@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api, handleApiError } from '../utils/api';
 import SideBar from './SideBar';
 import NavBar from '../NavBar/NavBar';
+import Footer from '../Footer/Footer';
 import useSocket from '../hooks/useSocket';
 import './admin.css';
 
@@ -23,7 +24,9 @@ const SupplyRequests = () => {
   const normalizeRequest = (request) => ({
     ...request,
     quantity: request.quantity_requested || request.quantity || 0,
-    status: request.status ? request.status.toLowerCase().replace('requeststatus.', '') : 'pending',
+    status: request.status
+      ? request.status.toLowerCase().replace('requeststatus.', '')
+      : 'pending',
   });
 
   const fetchRequests = async (retryCount = 0, maxRetries = 5) => {
@@ -102,7 +105,6 @@ const SupplyRequests = () => {
     };
 
     socket.on('supply_request', handleNewRequest);
-
     return () => {
       socket.off('supply_request', handleNewRequest);
     };
@@ -141,7 +143,6 @@ const SupplyRequests = () => {
       setRequests([...updatedRequests]);
       filterRequests(updatedRequests);
 
-      // Emit WebSocket event to notify clerk
       const request = requests.find((req) => req.id === requestId);
       if (socket) {
         socket.emit('supply_request_status', {
@@ -166,9 +167,10 @@ const SupplyRequests = () => {
     try {
       setLoading(true);
       console.log(`Declining request ID ${selectedRequestId} with reason: ${declineReason}`);
-      const response = await api.put(`/api/inventory/supply-requests/${selectedRequestId}/decline`, {
-        decline_reason: declineReason,
-      });
+      const response = await api.put(
+        `/api/inventory/supply-requests/${selectedRequestId}/decline`,
+        { decline_reason: declineReason }
+      );
       console.log('Decline response:', JSON.stringify(response.data, null, 2));
       setSuccess('Supply request declined successfully');
       setTimeout(() => setSuccess(''), 5000);
@@ -180,7 +182,6 @@ const SupplyRequests = () => {
       setRequests([...updatedRequests]);
       filterRequests(updatedRequests);
 
-      // Emit WebSocket event to notify clerk
       const request = requests.find((req) => req.id === selectedRequestId);
       if (socket) {
         socket.emit('supply_request_status', {
@@ -209,191 +210,252 @@ const SupplyRequests = () => {
   return (
     <div className="admin-container">
       <SideBar />
+
       <div className="main-content">
         <NavBar />
-        {error && (
-          <div className="alert error" role="alert">
-            {error}
-            <button onClick={() => setError('')} className="alert-close">×</button>
-          </div>
-        )}
-        {success && (
-          <div className="alert success" role="alert">
-            {success}
-            <button onClick={() => setSuccess('')} className="alert-close">×</button>
-          </div>
-        )}
-        {loading && <div className="loading">Loading requests...</div>}
 
-        <h1>Supply Requests</h1>
-        <div style={{ marginBottom: '20px' }}>
-          <button
-            onClick={() => fetchRequests()}
-            className="btn-primary"
-            disabled={loading}
-          >
-            Refresh Requests
-          </button>
-          <button
-            onClick={() => setShowRawData(!showRawData)}
-            className="btn-secondary"
-            style={{ marginLeft: '10px' }}
-          >
-            {showRawData ? 'Hide Raw Data' : 'Show Raw Data'}
-          </button>
-          <button
-            onClick={() => setShowAllRequests(!showAllRequests)}
-            className="btn-secondary"
-            style={{ marginLeft: '10px' }}
-          >
-            {showAllRequests ? 'Apply Filters' : 'Show All Requests'}
-          </button>
-        </div>
+        <div className="page-content">
 
-        {showRawData && (
-          <div className="card" style={{ marginBottom: '20px' }}>
-            <h3>Raw Fetched Requests</h3>
-            <pre style={{ maxHeight: '300px', overflow: 'auto' }}>
-              {JSON.stringify(requests, null, 2)}
-            </pre>
-          </div>
-        )}
-
-        <div className="tabs">
-          <button
-            className={`tab ${activeTab === 'pending' ? 'active' : ''}`}
-            onClick={() => setActiveTab('pending')}
-          >
-            Pending
-          </button>
-          <button
-            className={`tab ${activeTab === 'approved' ? 'active' : ''}`}
-            onClick={() => setActiveTab('approved')}
-          >
-            Approved
-          </button>
-          <button
-            className={`tab ${activeTab === 'declined' ? 'active' : ''}`}
-            onClick={() => setActiveTab('declined')}
-          >
-            Declined
-          </button>
-        </div>
-
-        <div className="search-container">
-          <input
-            type="text"
-            placeholder="Search products..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        <div className="card">
-          {filtered.length === 0 ? (
-            <p className="no-requests">No {activeTab} supply requests at this time.</p>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th>Requested By</th>
-                  <th>Quantity</th>
-                  <th>Current Stock</th>
-                  <th>Status</th>
-                  <th>Decline Reason</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((request) => (
-                  <tr key={request.id}>
-                    <td>{request.product_name || 'Unknown Product'}</td>
-                    <td>{request.clerk_name || 'Unknown Clerk'}</td>
-                    <td>{request.quantity || '-'}</td>
-                    <td className={request.current_stock <= 0 ? 'text-danger' : ''}>
-                      {request.current_stock || 0}
-                    </td>
-                    <td>
-                      <span
-                        className={`badge ${
-                          request.status === 'approved'
-                            ? 'success'
-                            : request.status === 'declined'
-                            ? 'danger'
-                            : 'warning'
-                        }`}
-                      >
-                        {request.status}
-                      </span>
-                    </td>
-                    <td>{request.decline_reason || '-'}</td>
-                    <td>
-                      {request.status === 'pending' && (
-                        <div className="action-buttons">
-                          <button
-                            onClick={() => handleApprove(request.id)}
-                            className="btn-sm success"
-                            disabled={loading}
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedRequestId(request.id);
-                              setShowDeclineModal(true);
-                            }}
-                            className="btn-sm danger"
-                            disabled={loading}
-                          >
-                            Decline
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* ── Alerts ── */}
+          {error && (
+            <div className="alert alert-error">
+              {error}
+              <button className="alert-close" onClick={() => setError('')}>×</button>
+            </div>
           )}
-        </div>
+          {success && (
+            <div className="alert alert-success">
+              {success}
+              <button className="alert-close" onClick={() => setSuccess('')}>×</button>
+            </div>
+          )}
+          {loading && <div className="alert alert-info">Loading requests...</div>}
 
-        {showDeclineModal && (
-          <div className="modal">
-            <div className="modal-content">
-              <h2>Decline Supply Request</h2>
-              <div className="form-group">
-                <label>Reason for Decline</label>
-                <textarea
-                  value={declineReason}
-                  onChange={(e) => setDeclineReason(e.target.value)}
-                  placeholder="Enter reason for declining the request"
-                  rows="4"
+          {/* ── Page Header ── */}
+          <div className="dashboard-header">
+            <h1 className="dashboard-title">Supply Requests</h1>
+            <p className="dashboard-subtitle">
+              Review and manage stock replenishment requests from clerks.
+            </p>
+          </div>
+
+          {/* ── Toolbar ── */}
+          <div className="toolbar">
+            <button
+              className="button btn-ghost"
+              onClick={() => fetchRequests()}
+              disabled={loading}
+            >
+              ↻ Refresh Requests
+            </button>
+            <button
+              className={`button ${showRawData ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setShowRawData(!showRawData)}
+            >
+              {showRawData ? 'Hide Raw Data' : 'Show Raw Data'}
+            </button>
+            <button
+              className={`button ${showAllRequests ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setShowAllRequests(!showAllRequests)}
+            >
+              {showAllRequests ? 'Apply Filters' : 'Show All Requests'}
+            </button>
+          </div>
+
+          {/* ── Raw Data Debug Panel ── */}
+          {showRawData && (
+            <div className="card" style={{ marginBottom: '1.5rem' }}>
+              <h3 className="section-title">Raw Fetched Requests</h3>
+              <pre style={{
+                maxHeight: '300px',
+                overflow: 'auto',
+                background: 'var(--slate-50)',
+                padding: '1rem',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '0.75rem',
+                color: 'var(--slate-600)',
+                border: '1px solid var(--slate-200)',
+              }}>
+                {JSON.stringify(requests, null, 2)}
+              </pre>
+            </div>
+          )}
+
+          {/* ── Main Card ── */}
+          <div className="card">
+
+            {/* ── Tabs ── */}
+            <div className="tabs">
+              {['pending', 'approved', 'declined'].map((tab) => (
+                <button
+                  key={tab}
+                  className={`tab ${activeTab === tab ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab)}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Search ── */}
+            <div className="search-container">
+              <div className="search-wrapper">
+                <svg
+                  className="search-icon"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <div className="modal-actions">
-                <button
-                  onClick={handleDecline}
-                  className="btn-primary"
-                  disabled={loading || !declineReason.trim()}
-                >
-                  Submit
-                </button>
-                <button
-                  onClick={() => {
-                    setShowDeclineModal(false);
-                    setDeclineReason('');
-                    setSelectedRequestId(null);
-                  }}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
+            </div>
+
+            {/* ── Table ── */}
+            {filtered.length === 0 ? (
+              <p className="no-requests">
+                No {activeTab} supply requests at this time.
+              </p>
+            ) : (
+              <div className="table-wrapper">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>Requested By</th>
+                      <th>Quantity</th>
+                      <th>Current Stock</th>
+                      <th>Status</th>
+                      <th>Decline Reason</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((request) => (
+                      <tr key={request.id}>
+                        <td style={{ fontWeight: 500 }}>
+                          {request.product_name || 'Unknown Product'}
+                        </td>
+                        <td className="text-muted">
+                          {request.clerk_name || 'Unknown Clerk'}
+                        </td>
+                        <td>{request.quantity || '-'}</td>
+                        <td>
+                          <span
+                            className={`status-badge ${
+                              request.current_stock <= 0 ? 'badge-danger' : 'badge-success'
+                            }`}
+                          >
+                            {request.current_stock || 0}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className={`status-badge ${
+                              request.status === 'approved'
+                                ? 'badge-success'
+                                : request.status === 'declined'
+                                ? 'badge-danger'
+                                : 'badge-warning'
+                            }`}
+                          >
+                            {request.status}
+                          </span>
+                        </td>
+                        <td className="text-muted">
+                          {request.decline_reason || '—'}
+                        </td>
+                        <td>
+                          {request.status === 'pending' && (
+                            <div className="action-group">
+                              <button
+                                onClick={() => handleApprove(request.id)}
+                                className="button-action btn-action-success"
+                                disabled={loading}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedRequestId(request.id);
+                                  setShowDeclineModal(true);
+                                }}
+                                className="button-action btn-action-danger"
+                                disabled={loading}
+                              >
+                                Decline
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+          </div>{/* /card */}
+
+          {/* ── Decline Modal ── */}
+          {showDeclineModal && (
+            <div
+              className="modal-overlay"
+              onClick={(e) => e.target === e.currentTarget && setShowDeclineModal(false)}
+            >
+              <div className="modal-content">
+                <h3 className="modal-title">Decline Supply Request</h3>
+
+                <div className="form-group">
+                  <label className="form-label">Reason for Decline</label>
+                  <textarea
+                    value={declineReason}
+                    onChange={(e) => setDeclineReason(e.target.value)}
+                    placeholder="Enter reason for declining the request..."
+                    rows={4}
+                  />
+                </div>
+
+                <div className="modal-actions">
+                  <button
+                    className="button btn-ghost"
+                    onClick={() => {
+                      setShowDeclineModal(false);
+                      setDeclineReason('');
+                      setSelectedRequestId(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="button btn-primary"
+                    onClick={handleDecline}
+                    disabled={loading || !declineReason.trim()}
+                  >
+                    {loading ? 'Submitting...' : 'Submit'}
+                  </button>
+                </div>
+
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+
+        </div>{/* /page-content */}
+
+        <Footer />
+      </div>{/* /main-content */}
     </div>
   );
 };
