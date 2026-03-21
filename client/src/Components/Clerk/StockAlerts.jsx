@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect, useContext } from 'react';
 import { api, handleApiError } from '../utils/api';
 import { AuthContext } from '../context/AuthContext';
 import SideBar from './SideBar';
 import NavBar from '../NavBar/NavBar';
+import Footer from '../Footer/Footer';
 import useSocket from '../hooks/useSocket';
 import './clerk.css';
 
@@ -83,7 +83,9 @@ const StockAlerts = () => {
             : req
         )
       );
-      setSuccess(`Supply request for ${data.product_name} has been ${normalizeStatus(data.status)}`);
+      setSuccess(
+        `Supply request for ${data.product_name} has been ${normalizeStatus(data.status)}`
+      );
       setTimeout(() => setSuccess(''), 5000);
     };
 
@@ -116,44 +118,49 @@ const StockAlerts = () => {
     try {
       setLoading(true);
       const payload = {
-        product_id: productId,
+        product_id:        productId,
         quantity_requested: quantity,
-        store_id: user.store.id,
-        clerk_id: user.id,
-        status: 'PENDING',
+        store_id:          user.store.id,
+        clerk_id:          user.id,
+        status:            'PENDING',
       };
       const response = await api.post('/api/inventory/supply-requests', payload);
       setSuccess('Supply request submitted successfully');
       setTimeout(() => setSuccess(''), 5000);
 
+      // Remove the alert once a supply request is submitted
       setAlerts(alerts.filter((a) => a.product_id !== productId));
+
+      // Clear the quantity input for this product
       setRequestQuantities((prev) => {
         const updated = { ...prev };
         delete updated[productId];
         return updated;
       });
 
+      // Add the new request to the history list
       const newRequest = normalizeRequest({
-        id: response.data.request.id,
-        product_id: productId,
-        product_name: productName,
+        id:                 response.data.request.id,
+        product_id:         productId,
+        product_name:       productName,
         quantity_requested: quantity, // Use quantity_requested for consistency
-        status: 'PENDING',
-        decline_reason: null,
+        status:             'PENDING',
+        decline_reason:     null,
       });
       setRequests((prev) => [newRequest, ...prev]);
 
+      // Emit WebSocket event to notify admin
       if (socket) {
         socket.emit('supply_request', {
-          request_id: response.data.request.id,
-          product_id: productId,
+          request_id:  response.data.request.id,
+          product_id:  productId,
           product_name: productName,
           quantity,
-          message: `New supply request for ${productName}: ${quantity} units`,
-          type: 'SUPPLY_REQUEST',
-          clerk_id: user.id,
-          clerk_name: user.name,
-          store_id: user.store.id,
+          message:     `New supply request for ${productName}: ${quantity} units`,
+          type:        'SUPPLY_REQUEST',
+          clerk_id:    user.id,
+          clerk_name:  user.name,
+          store_id:    user.store.id,
         });
       }
     } catch (err) {
@@ -169,120 +176,146 @@ const StockAlerts = () => {
   return (
     <div className="clerk-container">
       <SideBar />
+
       <div className="main-content">
         <NavBar />
-        {error && (
-          <div className="alert error" role="alert">
-            {error}
-            <button onClick={() => setError('')} className="alert-close">×</button>
-          </div>
-        )}
-        {success && (
-          <div className="alert success" role="alert">
-            {success}
-            <button onClick={() => setSuccess('')} className="alert-close">×</button>
-          </div>
-        )}
-        {loading && <div className="loading">Loading stock alerts...</div>}
-        <h1>Stock Alerts</h1>
-        <div className="card">
-          {!loading && alerts.length === 0 ? (
-            <p className="no-alerts">No low stock items at this time.</p>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th>Current Stock</th>
-                  <th>Minimum Required</th>
-                  <th>Quantity to Request</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {alerts.map((alert) => (
-                  <tr key={alert.product_id}>
-                    <td>{alert.product_name}</td>
-                    <td
-                      className={
-                        alert.current_stock <= alert.min_stock_level
-                          ? 'text-danger'
-                          : ''
-                      }
-                    >
-                      {alert.current_stock}
-                    </td>
-                    <td>{alert.min_stock_level}</td>
-                    <td>
-                      <input
-                        type="number"
-                        min="1"
-                        value={requestQuantities[alert.product_id] || ''}
-                        onChange={(e) =>
-                          handleQuantityChange(alert.product_id, e.target.value)
-                        }
-                        placeholder="Enter quantity"
-                        className="quantity-input"
-                      />
-                    </td>
-                    <td>
-                      <button
-                        onClick={() =>
-                          handleRequestSupply(alert.product_id, alert.product_name)
-                        }
-                        className="btn-primary"
-                        disabled={loading}
-                      >
-                        {loading ? 'Processing...' : 'Request Supply'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
 
-        <h2>Supply Requests History</h2>
-        <div className="card">
-          {requests.length === 0 ? (
-            <p>No supply requests submitted yet.</p>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th>Quantity Requested</th>
-                  <th>Status</th>
-                  <th>Decline Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {requests.map((request) => (
-                  <tr key={request.id}>
-                    <td>{request.product_name}</td>
-                    <td>{request.quantity}</td>
-                    <td>
-                      <span
-                        className={`badge ${
-                          request.status === 'APPROVED'
-                            ? 'success'
-                            : request.status === 'DECLINED'
-                            ? 'danger'
-                            : 'warning'
-                        }`}
-                      >
-                        {request.status}
-                      </span>
-                    </td>
-                    <td>{request.decline_reason || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="page-content">
+
+          {/* ── Alerts ── */}
+          {error && (
+            <div className="alert alert-error" role="alert">
+              {error}
+              <button className="alert-close" onClick={() => setError('')}>×</button>
+            </div>
           )}
-        </div>
-      </div>
+          {success && (
+            <div className="alert alert-success" role="alert">
+              {success}
+              <button className="alert-close" onClick={() => setSuccess('')}>×</button>
+            </div>
+          )}
+          {loading && <div className="loading">Loading stock alerts...</div>}
+
+          {/* ── Page Header ── */}
+          <div className="dashboard-header">
+            <h1 className="dashboard-title">Stock Alerts</h1>
+            <p className="dashboard-subtitle">
+              Products running low on stock — request replenishment here.
+            </p>
+          </div>
+
+          {/* ── Low Stock Alerts Card ── */}
+          <div className="card">
+            <h2 className="card-title">Low Stock Items</h2>
+            {!loading && alerts.length === 0 ? (
+              <p className="no-alerts">No low stock items at this time. 🎉</p>
+            ) : (
+              <div className="table-wrapper">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>Current Stock</th>
+                      <th>Minimum Required</th>
+                      <th>Quantity to Request</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alerts.map((alert) => (
+                      <tr key={alert.product_id}>
+                        <td style={{ fontWeight: 500 }}>{alert.product_name}</td>
+                        <td>
+                          <span
+                            className={`status-badge ${
+                              alert.current_stock <= alert.min_stock_level
+                                ? 'badge-danger'
+                                : 'badge-warning'
+                            }`}
+                          >
+                            {alert.current_stock}
+                          </span>
+                        </td>
+                        <td className="text-muted">{alert.min_stock_level}</td>
+                        <td>
+                          <input
+                            type="number"
+                            min="1"
+                            value={requestQuantities[alert.product_id] || ''}
+                            onChange={(e) =>
+                              handleQuantityChange(alert.product_id, e.target.value)
+                            }
+                            placeholder="Enter qty"
+                            className="quantity-input"
+                          />
+                        </td>
+                        <td>
+                          <button
+                            onClick={() =>
+                              handleRequestSupply(alert.product_id, alert.product_name)
+                            }
+                            className="btn-primary"
+                            disabled={loading}
+                          >
+                            {loading ? 'Processing...' : 'Request Supply'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* ── Supply Requests History Card ── */}
+          <h2 className="section-title">Supply Requests History</h2>
+          <div className="card">
+            {requests.length === 0 ? (
+              <p className="no-requests">No supply requests submitted yet.</p>
+            ) : (
+              <div className="table-wrapper">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>Quantity Requested</th>
+                      <th>Status</th>
+                      <th>Decline Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {requests.map((request) => (
+                      <tr key={request.id}>
+                        <td style={{ fontWeight: 500 }}>{request.product_name}</td>
+                        <td>{request.quantity}</td>
+                        <td>
+                          <span
+                            className={`badge ${
+                              request.status === 'APPROVED'
+                                ? 'success'
+                                : request.status === 'DECLINED'
+                                ? 'danger'
+                                : 'warning'
+                            }`}
+                          >
+                            {request.status}
+                          </span>
+                        </td>
+                        <td className="text-muted">{request.decline_reason || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+        </div>{/* /page-content */}
+
+        <Footer />
+      </div>{/* /main-content */}
     </div>
   );
 };
