@@ -1,101 +1,95 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+/* ============================================================
+   index.css — MyDuka Global Base Styles
+   
+   FIXES APPLIED vs original Vite starter:
+   1. Removed place-items:center from body — it was centering
+      the entire app in a flex container, squishing #root to
+      content-width instead of full viewport width. This was
+      the root cause of the blank/clipped layout at wide screens.
+   2. Removed dark color-scheme defaults (:root background-color
+      #242424, color rgba(255,255,255,0.87)) — MyDuka uses a
+      light Navy/Gold theme defined in merchant.css.
+   3. Removed default button styles — merchant.css, admin.css,
+      clerk.css each define their own button styles.
+   4. Removed h1 font-size:3.2em — page headings are styled
+      per-component in their respective CSS files.
+   ============================================================ */
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ── Reset & Box Model ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: none;
-}
-a:hover {
-  color: #535bf2;
+/* ── Root / HTML ── */
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
 }
 
+/*
+  CRITICAL FIX: body must NOT have display:flex + place-items:center.
+  The original Vite starter index.css had:
+    body { display: flex; place-items: center; }
+  This centered #root inside the body as a flex item, limiting its
+  width to content size rather than full viewport — causing the
+  dashboard to appear blank or clipped at wider screen sizes.
+*/
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
+  padding: 0;
   min-height: 100vh;
+  min-width: 320px;
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+  /* Background and color are set by merchant.css / admin.css / clerk.css */
+  background-color: #f0f4f8;
+  color: #0f172a;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
-}
-
-.app-container {
+/* ── #root must fill the full viewport ── */
+#root {
+  min-height: 100vh;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
 }
 
-.content-wrapper {
-  flex: 1;
-  padding-top: 4rem; /* 16px = 4rem, assuming default font size */
-}
-
+/* ── Typography resets ── */
 h1, h2, h3, h4, h5, h6 {
   margin-top: 0;
-  color: #111827; /* Equivalent to text-gray-900 */
+  margin-bottom: 0;
 }
 
 p {
-  margin-bottom: 1rem; /* 16px = 1rem */
+  margin-top: 0;
+  margin-bottom: 1rem;
 }
 
+/* ── Links ── */
 a {
-  color: #1e3a8a; /* Equivalent to text-blue-900 */
+  font-weight: 500;
+  color: #0f172a;
   text-decoration: none;
-  transition: color 0.2s;
+  transition: color 0.2s ease;
 }
 a:hover {
-  color: #1e40af; /* Equivalent to hover:text-blue-700 */
+  color: #d4a853;
 }
 
+/* ── Images ── */
+img, svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* ── Error Boundary ── */
 .error-boundary {
   display: flex;
   flex-direction: column;
@@ -103,33 +97,31 @@ a:hover {
   justify-content: center;
   height: 100vh;
   text-align: center;
-  padding: 2rem; /* 32px = 2rem */
-  background-color: #fef2f2; /* Equivalent to bg-red-50 */
+  padding: 2rem;
+  background-color: #fef2f2;
 }
-
 .error-boundary h1 {
-  font-size: 1.875rem; /* 30px = 1.875rem, equivalent to text-3xl */
-  color: #dc2626; /* Equivalent to text-red-600 */
-  margin-bottom: 1rem; /* 16px = 1rem */
+  font-size: 1.875rem;
+  color: #dc2626;
+  margin-bottom: 1rem;
 }
-
 .error-boundary p {
-  font-size: 1rem; /* 16px = 1rem, equivalent to text-base */
-  color: #4b5563; /* Equivalent to text-gray-600 */
-  margin-bottom: 1.5rem; /* 24px = 1.5rem */
-  max-width: 65ch; /* Equivalent to max-w-prose */
+  font-size: 1rem;
+  color: #4b5563;
+  margin-bottom: 1.5rem;
+  max-width: 65ch;
 }
-
 .error-boundary button {
-  background-color: #1e3a8a; /* Equivalent to bg-blue-900 */
-  color: #ffffff; /* Equivalent to text-white */
-  padding: 0.75rem 1.5rem; /* 12px 24px = 0.75rem 1.5rem */
-  border-radius: 0.5rem; /* 8px = 0.5rem */
+  background-color: #0f172a;
+  color: #e8c97a;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
   border: none;
   cursor: pointer;
   font-weight: 500;
   transition: background-color 0.2s;
 }
 .error-boundary button:hover {
-  background-color: #1e40af; /* Equivalent to hover:bg-blue-700 */
+  background-color: #d4a853;
+  color: #0f172a;
 }
